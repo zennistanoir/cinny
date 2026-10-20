@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, useCallback, useRef, useState } from 'react';
+import React, { MouseEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -38,6 +38,27 @@ export function CallControls({ callEmbed }: CallControlsProps) {
   );
 
   const [cords, setCords] = useState<RectCords>();
+  const [visible, setVisible] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const hoveringRef = useRef(false);
+
+  // Auto-hide after 3 seconds of no mouse movement
+  useEffect(() => {
+    const resetTimer = () => {
+      setVisible(true);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => {
+        if (!hoveringRef.current) setVisible(false);
+      }, 3000);
+    };
+
+    resetTimer();
+    window.addEventListener('mousemove', resetTimer);
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setCords(evt.currentTarget.getBoundingClientRect());
@@ -73,6 +94,14 @@ export function CallControls({ callEmbed }: CallControlsProps) {
       className={css.CallControlContainer}
       justifyContent="Center"
       alignItems="Center"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(20px)',
+        transition: 'opacity 0.3s ease, transform 0.3s ease',
+        pointerEvents: visible ? 'auto' : 'none',
+      }}
+      onMouseEnter={() => { hoveringRef.current = true; }}
+      onMouseLeave={() => { hoveringRef.current = false; }}
     >
       <SequenceCard
         className={css.ControlCard}

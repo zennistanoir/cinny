@@ -55,6 +55,7 @@ function KeybindInput({
   const [currentValue, setCurrentValue] = useState(value ?? '');
   const [enabled, setEnabled] = useState(!!value);
   const [recording, setRecording] = useState(false);
+  const capturedRef = React.useRef<string>('');
 
   const handleToggle = (v: boolean) => {
     setEnabled(v);
@@ -91,21 +92,27 @@ function KeybindInput({
 
     const hotkey = eventToHotkeyString(evt);
     if (hotkey) {
+      capturedRef.current = hotkey;
       setCurrentValue(hotkey);
       setValue(hotkey);
       setRecording(false);
-      // Blur the element to exit recording mode visually
+      // Blur to exit recording mode visually.
       (evt.currentTarget as HTMLElement).blur();
     }
   };
 
   const startRecording = () => {
     if (!enabled) return;
+    capturedRef.current = currentValue;
     setRecording(true);
   };
 
   const stopRecording = () => {
-    setValue(currentValue);
+    if (capturedRef.current) {
+      setValue(capturedRef.current);
+      setCurrentValue(capturedRef.current);
+      capturedRef.current = '';
+    }
     setRecording(false);
   };
 

@@ -155,42 +155,79 @@ import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
+import { useCallSpeakers } from '../../hooks/useCallSpeakers';
 import { UserAvatar } from '../../components/user-avatar';
 
-function CallMemberSubItem({ userId }: { userId: string }) {
+function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
+  userId: string;
+  roomId: string;
+  spaceId?: string;
+  isSpeaking?: boolean;
+}) {
   const mx = useMatrixClient();
   const profile = useUserProfile(userId);
   const useAuthentication = useMediaAuthentication();
+  const openUserProfile = useOpenUserRoomProfile();
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl
-    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined
+    ? (mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined)
     : undefined;
 
-  const avatarEl = avatarUrl ? (
-    <img className="zennith-voice-avatar" src={avatarUrl} alt={displayName} />
-  ) : (
-    <div className="zennith-voice-avatar">
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          color: '#dbdee1',
-          fontSize: '9px',
-          fontWeight: 600,
-          borderRadius: '50%',
-        }}
-      >
-        {nameInitials(displayName)}
-      </div>
+  const [imgError, setImgError] = useState(false);
+
+  // Discord-style colored avatar fallback — deterministic hue from userId.
+  const hue = userId
+    ? [...userId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360
+    : 0;
+  const initial = (displayName || 'U').charAt(0).toUpperCase();
+  const showFallback = !avatarUrl || imgError;
+
+  const fallbackEl = (
+    <div
+      style={{
+        width: '20px',
+        height: '20px',
+        minWidth: '20px',
+        minHeight: '20px',
+        borderRadius: '50%',
+        backgroundColor: `hsl(${hue}, 50%, 45%)`,
+        color: '#fff',
+        fontSize: '11px',
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {initial}
     </div>
   );
 
+  const handleOpenProfile = (evt: React.MouseEvent) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const rect = (evt.currentTarget as HTMLElement).getBoundingClientRect();
+    openUserProfile(roomId, spaceId, userId, {
+      x: rect.right,
+      y: rect.top,
+      width: 0,
+      height: 0,
+    }, 'Left');
+  };
+
+  const avatarEl = showFallback ? fallbackEl : (
+    <img
+      className={`zennith-voice-avatar${isSpeaking ? ' speaking' : ''}`}
+      src={avatarUrl}
+      alt={displayName}
+      onError={() => setImgError(true)}
+    />
+  );
+
   return (
-    <div className="zennith-voice-user-item">
+    <div className="zennith-voice-user-item" onClick={handleOpenProfile} style={{ cursor: 'pointer' }}>
       {avatarEl}
       <span className="zennith-voice-username">{displayName}</span>
     </div>
@@ -424,6 +461,7 @@ export function RoomNavItem({
   const callMembers = useCallMembers(callSession);
   const startCall = useCallStart(direct);
   const callEmbed = useCallEmbed();
+  const space = useSpaceOptionally();
   const callPref = useAtomValue(useCallPreferencesAtom());
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
 
@@ -466,8 +504,22 @@ export function RoomNavItem({
       {...focusWithinProps}
     >
       <div className="zennith-voice-channel-block">
-        {/* 1. Channel Header Row — STRICTLY for channel name & badges */}
-        <div className="zennith-channel-header-row">
+        {/* 1. Channel Header Row — clickable link for navigation */}
+        <NavLink
+          to={linkPath}
+          onClick={room.isCallRoom() ? handleStartCall : undefined}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: '34px',
+            padding: '0 8px',
+            borderRadius: '4px',
+            width: '100%',
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}
+        >
           <div className="channel-title-group">
             <RoomIcon
               style={{
@@ -499,13 +551,18 @@ export function RoomNavItem({
               {callMembers.length} Live
             </span>
           )}
-        </div>
+        </NavLink>
 
         {/* 2. Connected Users Tree — STRICTLY OUTSIDE AND BELOW THE HEADER */}
         {callMembers.length > 0 && selected && (
           <div className="zennith-voice-user-tree">
             {callMembers.slice(0, 10).map((member) => (
-              <CallMemberSubItem key={member.deviceId || member.memberId} userId={member.userId} />
+              <CallMemberSubItem
+                key={member.deviceId || member.memberId}
+                userId={member.userId}
+                roomId={room.roomId}
+                spaceId={space?.roomId}
+              />
             ))}
             {callMembers.length > 10 && (
               <div style={{ paddingLeft: '28px' }}>
@@ -517,10 +574,7 @@ export function RoomNavItem({
           </div>
         )}
 
-        {/* 3. Channel link for click-to-navigate */}
-        <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}
-          style={{ display: 'none' }} />
-      </div>
+        </div>
 
       {optionsVisible && (
         <NavItemOptions>

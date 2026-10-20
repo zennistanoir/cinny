@@ -122,11 +122,46 @@ export class CallControl extends EventEmitter implements CallControlState {
   public startObserving() {
     if (!this.document) return;
 
+    // Monkey-patch RTCPeerConnection in the iframe to capture
+    // all instances so Zennith can poll getStats() for live RTT.
+    this.injectPCPatch();
+
     this.bodyMutationObserver.observe(this.document.body, {
       childList: true,
       subtree: false, // only direct children of body
     });
     this.onBodyMutation();
+  }
+
+  /** Inject a script that wraps RTCPeerConnection to store all instances. */
+  private injectPCPatch() {
+    if (!this.document) return;
+    const patchId = 'zennith-pc-patch';
+    if (this.document.getElementById(patchId)) return;
+
+    const script = this.document.createElement('script');
+    script.id = patchId;
+    script.textContent = `
+      (function() {
+        if (window.__zennithPCs) return;
+        window.__zennithPCs = [];
+        var OrigPC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+        if (!OrigPC) return;
+        window.RTCPeerConnection = function() {
+          var pc = new OrigPC(arguments[0], arguments[1]);
+          try { window.__zennithPCs.push(pc); } catch(e) {}
+          pc.addEventListener('connectionstatechange', function() {
+            if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+              var idx = window.__zennithPCs.indexOf(pc);
+              if (idx > -1) window.__zennithPCs.splice(idx, 1);
+            }
+          });
+          return pc;
+        };
+        window.RTCPeerConnection.prototype = OrigPC.prototype;
+      })();
+    `;
+    this.document.head.appendChild(script);
   }
   
   private onBodyMutation() {
@@ -167,6 +202,27 @@ export class CallControl extends EventEmitter implements CallControlState {
       '  background-color: rgba(0, 0, 0, 0.5) !important;',
       '  color: #ffffff !important;',
       '  box-shadow: none !important;',
+      '}',
+      // Bot / audio-only tile avatar: centered circle with initial fallback.
+      '[class*="tile"]:not([class*="videoMuted"]) [class*="avatar"],',
+      '[data-video-fit="cover"] [class*="avatar"]{',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  width: 120px !important;',
+      '  height: 120px !important;',
+      '  border-radius: 50% !important;',
+      '  font-size: 48px !important;',
+      '  font-weight: 700 !important;',
+      '  color: #fff !important;',
+      '  overflow: hidden !important;',
+      '}',
+      '[class*="tile"]:not([class*="videoMuted"]) [class*="avatar"] img,',
+      '[data-video-fit="cover"] [class*="avatar"] img{',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  object-fit: cover !important;',
+      '  border-radius: 50% !important;',
       '}',
     ].join('\n');
     this.document.head.appendChild(style);
