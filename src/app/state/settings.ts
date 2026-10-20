@@ -47,6 +47,10 @@ export interface Settings {
   dateFormatString: string;
 
   developerTools: boolean;
+
+  keybindToggleMute?: string;
+  keybindToggleDeafen?: string;
+  keybindPushToTalk?: string;
 }
 
 const defaultSettings: Settings = {
@@ -81,6 +85,10 @@ const defaultSettings: Settings = {
   dateFormatString: 'D MMM YYYY',
 
   developerTools: false,
+
+  keybindToggleMute: 'ctrl+shift+m',
+  keybindToggleDeafen: 'ctrl+shift+d',
+  keybindPushToTalk: 'ctrl+shift+space',
 };
 
 export const getSettings = () => {

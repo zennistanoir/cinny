@@ -14,11 +14,11 @@ export function WelcomePage() {
       >
         <PageHeroSection>
           <PageHero
-            icon={<img width="70" height="70" src={CinnySVG} alt="Cinny Logo" />}
-            title="Welcome to Cinny"
+            icon={<img width="70" height="70" src={CinnySVG} alt="Zennith Logo" />}
+            title="Welcome to Zennith"
             subTitle={
               <span>
-                Yet another matrix client.{' '}
+                A minimalistic, futuristic Matrix client.{' '}
                 <a
                   href="https://github.com/cinnyapp/cinny/releases"
                   target="_blank"

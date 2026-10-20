@@ -56,6 +56,70 @@ import { getRoomPermissionsAPI } from '../hooks/useRoomPermissions';
 import { useLivekitSupport } from '../hooks/useLivekitSupport';
 import { CallAvatarAnimation } from '../styles/Animations.css';
 import { webRTCSupported } from '../utils/rtc';
+import { isKeyHotkey } from 'is-hotkey';
+import { useSetting } from '../state/hooks/settings';
+import { settingsAtom } from '../state/settings';
+
+function GlobalKeybindsListener() {
+  const callEmbed = useAtomValue(callEmbedAtom);
+  const [toggleMute] = useSetting(settingsAtom, 'keybindToggleMute');
+  const [toggleDeafen] = useSetting(settingsAtom, 'keybindToggleDeafen');
+  const [pushToTalk] = useSetting(settingsAtom, 'keybindPushToTalk');
+  const prevMicRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (evt: KeyboardEvent) => {
+      if (!callEmbed) return;
+      const target = evt.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        (target as HTMLElement).isContentEditable
+      )
+        return;
+
+      if (toggleMute && isKeyHotkey(toggleMute, evt)) {
+        evt.preventDefault();
+        callEmbed.control.toggleMicrophone();
+      }
+      if (toggleDeafen && isKeyHotkey(toggleDeafen, evt)) {
+        evt.preventDefault();
+        callEmbed.control.toggleSound();
+      }
+      if (pushToTalk && isKeyHotkey(pushToTalk, evt)) {
+        evt.preventDefault();
+        if (prevMicRef.current === null) {
+          prevMicRef.current = callEmbed.control.microphone;
+          if (!callEmbed.control.microphone) {
+            callEmbed.control.toggleMicrophone();
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (evt: KeyboardEvent) => {
+      if (!callEmbed || !pushToTalk) return;
+      if (isKeyHotkey(pushToTalk, evt)) {
+        if (prevMicRef.current !== null) {
+          const wasMuted = !prevMicRef.current;
+          prevMicRef.current = null;
+          if (wasMuted) {
+            callEmbed.control.toggleMicrophone();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [callEmbed, toggleMute, toggleDeafen, pushToTalk]);
+
+  return null;
+}
 
 type IncomingCallInfo = {
   room: Room;
@@ -386,17 +450,25 @@ export function CallEmbedProvider({ children }: CallEmbedProviderProps) {
       {callEmbed && <CallUtils embed={callEmbed} />}
       <CallEmbedRefContextProvider value={callEmbedRef}>
         <IncomingCallListener callEmbed={callEmbed} joined={joined} />
+        <GlobalKeybindsListener />
         {children}
       </CallEmbedRefContextProvider>
       <div
         data-call-embed-container
         style={{
+          // The call embed must never spawn a full-screen overlay that blocks
+          // navigation. It starts at 0x0 and is sized into the room's call view
+          // by `useCallEmbedPlacementSync`; `pointer-events: none` guarantees the
+          // embedded iframe never intercepts clicks (all controls are driven by
+          // Zennith's own pill bar + status card).
           visibility: callVisible ? undefined : 'hidden',
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '50%',
+          width: 0,
+          height: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
         }}
         ref={callEmbedRef}
       />

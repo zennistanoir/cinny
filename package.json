@@ -1,7 +1,7 @@
 {
-  "name": "cinny",
+  "name": "zennith",
   "version": "4.12.7",
-  "description": "Yet another matrix client",
+  "description": "A minimalistic, futuristic Matrix client",
   "main": "index.js",
   "type": "module",
   "engines": {

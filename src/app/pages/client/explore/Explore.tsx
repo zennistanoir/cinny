@@ -36,6 +36,7 @@ import { getMxIdServer } from '../../../utils/matrix';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+import { PageNavFooter } from '../../../components/page-nav-footer';
 import { stopPropagation } from '../../../utils/keyboard';
 
 export function AddServer() {
@@ -262,6 +263,7 @@ export function Explore() {
           </Box>
         </Box>
       </PageNavContent>
+      <PageNavFooter />
     </PageNav>
   );
 }

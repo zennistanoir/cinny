@@ -19,8 +19,16 @@ export const CallMemberCard = style({
   padding: config.space.S300,
 });
 
+export const CallTileContainer = style({
+  position: 'relative',
+});
+
 export const CallControlContainer = style({
-  padding: config.space.S400,
+  position: 'absolute',
+  left: '50%',
+  bottom: config.space.S400,
+  transform: 'translateX(-50%)',
+  zIndex: 1,
 });
 
 export const PrescreenMessage = style({

@@ -32,10 +32,11 @@ export const useSendClientWidgetApiAction = (api: ClientWidgetApi) => {
   return sendWidgetAction;
 };
 
-export const useCallControlState = (control: CallControl): CallControlState => {
-  const [state, setState] = useState(control.getState());
+export const useCallControlState = (control: CallControl | null): CallControlState | null => {
+  const [state, setState] = useState(control?.getState() ?? null);
 
   useEffect(() => {
+    if (!control) return;
     const handleUpdate = () => {
       setState(control.getState());
     };
