@@ -25,7 +25,7 @@ type PresenceBadgeProps = {
   status?: string;
   size?: '200' | '300' | '400' | '500';
 };
-export function PresenceBadge({ presence, status, size }: PresenceBadgeProps) {
+export function PresenceBadge({ presence, status, size = '300' }: PresenceBadgeProps) {
   const label = usePresenceLabel();
   const badgeLabelId = useId();
 

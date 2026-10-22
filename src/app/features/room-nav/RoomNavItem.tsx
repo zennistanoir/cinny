@@ -1,4 +1,97 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
+
+// Inject voice-channel participant tree styles once globally.
+// Uses !important to override folds NavItem display:flex.
+let voiceTreeStylesInjected = false;
+function injectVoiceTreeStyles() {
+  if (voiceTreeStylesInjected || typeof document === 'undefined') return;
+  voiceTreeStylesInjected = true;
+  const style = document.createElement('style');
+  style.id = 'zennith-voice-tree';
+  style.textContent = [
+    '.zennith-voice-channel-block {',
+    '  display: flex !important;',
+    '  flex-direction: column !important;',
+    '  width: 100% !important;',
+    '  margin-bottom: 2px !important;',
+    '}',
+    '.zennith-channel-header-row {',
+    '  display: flex !important;',
+    '  align-items: center !important;',
+    '  justify-content: space-between !important;',
+    '  height: 34px !important;',
+    '  padding: 0 8px !important;',
+    '  border-radius: 4px !important;',
+    '  width: 100% !important;',
+    '  background: transparent;',
+    '  cursor: pointer;',
+    '  overflow: hidden !important;',
+    '}',
+    '.channel-title-group {',
+    '  display: flex !important;',
+    '  align-items: center !important;',
+    '  gap: 8px !important;',
+    '  min-width: 0 !important;',
+    '  flex: 1;',
+    '}',
+    '.channel-name {',
+    '  font-size: 14px !important;',
+    '  color: #949ba4 !important;',
+    '  white-space: nowrap !important;',
+    '  overflow: hidden !important;',
+    '  text-overflow: ellipsis !important;',
+    '}',
+    '.zennith-voice-user-tree {',
+    '  display: flex !important;',
+    '  flex-direction: column !important;',
+    '  width: 100% !important;',
+    '  padding-left: 28px !important;',
+    '  margin-top: 2px !important;',
+    '  gap: 2px !important;',
+    '}',
+    '.zennith-voice-user-item {',
+    '  display: flex !important;',
+    '  align-items: center !important;',
+    '  gap: 8px !important;',
+    '  height: 28px !important;',
+    '  width: 100% !important;',
+    '  border-radius: 4px !important;',
+    '  padding: 0 6px !important;',
+    '}',
+    '.zennith-voice-user-item:hover {',
+    '  background: rgba(255, 255, 255, 0.05) !important;',
+    '}',
+    '.zennith-voice-avatar {',
+    '  width: 20px !important;',
+    '  height: 20px !important;',
+    '  min-width: 20px !important;',
+    '  min-height: 20px !important;',
+    '  max-width: 20px !important;',
+    '  max-height: 20px !important;',
+    '  border-radius: 50% !important;',
+    '  object-fit: cover !important;',
+    '  flex-shrink: 0 !important;',
+    '  overflow: hidden !important;',
+    '}',
+    '.zennith-voice-avatar.speaking {',
+    '  border: 2px solid #23a55a !important;',
+    '  box-shadow: 0 0 6px rgba(35, 165, 90, 0.6) !important;',
+    '}',
+    '.zennith-voice-avatar img {',
+    '  width: 100% !important;',
+    '  height: 100% !important;',
+    '  object-fit: cover !important;',
+    '}',
+    '.zennith-voice-username {',
+    '  font-size: 13px !important;',
+    '  color: #dbdee1 !important;',
+    '  white-space: nowrap !important;',
+    '  overflow: hidden !important;',
+    '  text-overflow: ellipsis !important;',
+    '}',
+  ].join('\n');
+  document.head.appendChild(style);
+}
 import { Room } from 'matrix-js-sdk';
 import {
   Avatar,
@@ -37,7 +130,7 @@ import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
-import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
+import { getCanonicalAliasOrRoomId, getMxIdLocalPart, isRoomAlias, mxcUrlToHttp } from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useSetting } from '../../state/hooks/settings';
@@ -61,6 +154,85 @@ import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
 import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
+import { useCallSpeakers } from '../../hooks/useCallSpeakers';
+import { UserAvatar } from '../../components/user-avatar';
+
+function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
+  userId: string;
+  roomId: string;
+  spaceId?: string;
+  isSpeaking?: boolean;
+}) {
+  const mx = useMatrixClient();
+  const profile = useUserProfile(userId);
+  const useAuthentication = useMediaAuthentication();
+  const openUserProfile = useOpenUserRoomProfile();
+  const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
+  const avatarUrl = profile.avatarUrl
+    ? (mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined)
+    : undefined;
+
+  const [imgError, setImgError] = useState(false);
+
+  // Discord-style colored avatar fallback — deterministic hue from userId.
+  const hue = userId
+    ? [...userId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360
+    : 0;
+  const initial = (displayName || 'U').charAt(0).toUpperCase();
+  const showFallback = !avatarUrl || imgError;
+
+  const fallbackEl = (
+    <div
+      style={{
+        width: '20px',
+        height: '20px',
+        minWidth: '20px',
+        minHeight: '20px',
+        borderRadius: '50%',
+        backgroundColor: `hsl(${hue}, 50%, 45%)`,
+        color: '#fff',
+        fontSize: '11px',
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {initial}
+    </div>
+  );
+
+  const handleOpenProfile = (evt: React.MouseEvent) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const rect = (evt.currentTarget as HTMLElement).getBoundingClientRect();
+    openUserProfile(roomId, spaceId, userId, {
+      x: rect.right,
+      y: rect.top,
+      width: 0,
+      height: 0,
+    }, 'Left');
+  };
+
+  const avatarEl = showFallback ? fallbackEl : (
+    <img
+      className={`zennith-voice-avatar${isSpeaking ? ' speaking' : ''}`}
+      src={avatarUrl}
+      alt={displayName}
+      onError={() => setImgError(true)}
+    />
+  );
+
+  return (
+    <div className="zennith-voice-user-item" onClick={handleOpenProfile} style={{ cursor: 'pointer' }}>
+      {avatarEl}
+      <span className="zennith-voice-username">{displayName}</span>
+    </div>
+  );
+}
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -255,6 +427,10 @@ export function RoomNavItem({
 }: RoomNavItemProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+
+  useEffect(() => {
+    injectVoiceTreeStyles();
+  }, []);
   const [hover, setHover] = useState(false);
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
@@ -285,6 +461,7 @@ export function RoomNavItem({
   const callMembers = useCallMembers(callSession);
   const startCall = useCallStart(direct);
   const callEmbed = useCallEmbed();
+  const space = useSpaceOptionally();
   const callPref = useAtomValue(useCallPreferencesAtom());
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
 
@@ -326,69 +503,79 @@ export function RoomNavItem({
       {...hoverProps}
       {...focusWithinProps}
     >
-      <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
-        <NavItemContent>
-          <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Avatar size="200" radii="400">
-              {showAvatar ? (
-                <RoomAvatar
-                  roomId={room.roomId}
-                  src={
-                    direct
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                  }
-                  alt={roomName}
-                  renderFallback={() => (
-                    <Text as="span" size="H6">
-                      {nameInitials(roomName)}
-                    </Text>
-                  )}
-                />
-              ) : (
-                <RoomIcon
-                  style={{
-                    opacity: unread ? config.opacity.P500 : config.opacity.P300,
-                  }}
-                  filled={selected}
-                  size="100"
-                  joinRule={room.getJoinRule()}
-                  roomType={room.getType()}
-                />
-              )}
-            </Avatar>
-            <Box as="span" grow="Yes">
-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
-                {roomName}
-              </Text>
-            </Box>
-            {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
-              <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
-                <TypingIndicator size="300" disableAnimation />
-              </Badge>
-            )}
-            {!optionsVisible && unread && (
-              <UnreadBadgeCenter>
-                <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
-              </UnreadBadgeCenter>
-            )}
-            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
-              <Icon
-                size="50"
-                src={getRoomNotificationModeIcon(notificationMode)}
-                aria-label={notificationMode}
+      <div className="zennith-voice-channel-block">
+        {/* 1. Channel Header Row — clickable link for navigation */}
+        <NavLink
+          to={linkPath}
+          onClick={room.isCallRoom() ? handleStartCall : undefined}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: '34px',
+            padding: '0 8px',
+            borderRadius: '4px',
+            width: '100%',
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}
+        >
+          <div className="channel-title-group">
+            <RoomIcon
+              style={{
+                opacity: unread ? config.opacity.P500 : config.opacity.P300,
+                width: '24px',
+                height: '24px',
+                flexShrink: 0,
+              }}
+              filled={selected}
+              size="100"
+              joinRule={room.getJoinRule()}
+              roomType={room.getType()}
+            />
+            <span className="channel-name">{roomName}</span>
+          </div>
+          {callMembers.length > 0 && (
+            <span
+              style={{
+                backgroundColor: '#f23f43',
+                color: '#fff',
+                borderRadius: '8px',
+                padding: '0 6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                lineHeight: '18px',
+                flexShrink: 0,
+              }}
+            >
+              {callMembers.length} Live
+            </span>
+          )}
+        </NavLink>
+
+        {/* 2. Connected Users Tree — STRICTLY OUTSIDE AND BELOW THE HEADER */}
+        {callMembers.length > 0 && (
+          <div className="zennith-voice-user-tree">
+            {callMembers.slice(0, 10).map((member) => (
+              <CallMemberSubItem
+                key={member.deviceId || member.memberId}
+                userId={member.userId}
+                roomId={room.roomId}
+                spaceId={space?.roomId}
               />
-            )}
-            {callMembers.length > 0 && (
-              <Badge variant="Critical" fill="Solid" size="400">
-                <Text as="span" size="L400" truncate>
-                  {callMembers.length} Live
+            ))}
+            {callMembers.length > 10 && (
+              <div style={{ paddingLeft: '28px' }}>
+                <Text priority="300" size="T200">
+                  +{callMembers.length - 10} more
                 </Text>
-              </Badge>
+              </div>
             )}
-          </Box>
-        </NavItemContent>
-      </NavLink>
+          </div>
+        )}
+
+        </div>
+
       {optionsVisible && (
         <NavItemOptions>
           {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (

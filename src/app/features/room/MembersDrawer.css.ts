@@ -1,5 +1,5 @@
 import { keyframes, style } from '@vanilla-extract/css';
-import { config, toRem } from 'folds';
+import { color, config, toRem } from 'folds';
 
 export const MembersDrawer = style({
   width: toRem(266),
@@ -60,3 +60,51 @@ export const DrawerVirtualItem = style({
   left: 0,
   width: '100%',
 });
+
+export const MemberSection = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: config.space.S100,
+});
+
+export const MemberSectionHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: config.space.S200,
+  padding: `${config.space.S200} ${config.space.S200} ${config.space.S100}`,
+  color: color.Background.OnContainer,
+});
+
+export const MemberSectionHeaderBtn = style({
+  flexGrow: 1,
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: config.space.S100,
+  padding: 0,
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'inherit',
+});
+
+export const MemberSectionTitle = style({
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  fontWeight: 700,
+});
+
+export const MemberSectionCount = style({
+  flexShrink: 0,
+  opacity: 0.6,
+});
+
+export const MemberDimmed = style({
+  opacity: 0.5,
+});
+
+export const MemberDimmedAvatar = style({
+  filter: 'grayscale(1)',
+});
+

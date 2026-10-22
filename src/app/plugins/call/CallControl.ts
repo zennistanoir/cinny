@@ -20,6 +20,10 @@ export class CallControl extends EventEmitter implements CallControlState {
 
   private mediaStatePromiseResolver: undefined | (() => void);
 
+  private reactionsOpen = false;
+
+  private reactionsCloseHandler: (() => void) | undefined;
+
   private get document(): Document | undefined {
     return this.iframe.contentDocument ?? this.iframe.contentWindow?.document;
   }
@@ -118,11 +122,46 @@ export class CallControl extends EventEmitter implements CallControlState {
   public startObserving() {
     if (!this.document) return;
 
+    // Monkey-patch RTCPeerConnection in the iframe to capture
+    // all instances so Zennith can poll getStats() for live RTT.
+    this.injectPCPatch();
+
     this.bodyMutationObserver.observe(this.document.body, {
       childList: true,
       subtree: false, // only direct children of body
     });
     this.onBodyMutation();
+  }
+
+  /** Inject a script that wraps RTCPeerConnection to store all instances. */
+  private injectPCPatch() {
+    if (!this.document) return;
+    const patchId = 'zennith-pc-patch';
+    if (this.document.getElementById(patchId)) return;
+
+    const script = this.document.createElement('script');
+    script.id = patchId;
+    script.textContent = `
+      (function() {
+        if (window.__zennithPCs) return;
+        window.__zennithPCs = [];
+        var OrigPC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+        if (!OrigPC) return;
+        window.RTCPeerConnection = function() {
+          var pc = new OrigPC(arguments[0], arguments[1]);
+          try { window.__zennithPCs.push(pc); } catch(e) {}
+          pc.addEventListener('connectionstatechange', function() {
+            if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+              var idx = window.__zennithPCs.indexOf(pc);
+              if (idx > -1) window.__zennithPCs.splice(idx, 1);
+            }
+          });
+          return pc;
+        };
+        window.RTCPeerConnection.prototype = OrigPC.prototype;
+      })();
+    `;
+    this.document.head.appendChild(script);
   }
   
   private onBodyMutation() {
@@ -136,7 +175,57 @@ export class CallControl extends EventEmitter implements CallControlState {
       controls.style.setProperty('visibility', 'hidden');
     }
 
+    this.injectTileStyles();
     this.observeControls();
+  }
+
+  /**
+   * Inject Zennith call-tile styling into the element-call iframe document.
+   * Element Call hashes its CSS class names (e.g. `_speaking_ghafa_28`), so we
+   * match on the stable readable segment of each class instead of the hash.
+   */
+  private injectTileStyles() {
+    if (!this.document) return;
+
+    const styleId = 'zennith-call-tiles';
+    if (this.document.getElementById(styleId)) return;
+
+    const style = this.document.createElement('style');
+    style.id = styleId;
+    style.textContent = [
+      // Green glowing ring around the whole tile while its participant speaks.
+      '[class*="tile"][class*="speaking"]{',
+      '  box-shadow: 0 0 8px rgba(35, 165, 90, 0.6) !important;',
+      '}',
+      // Semi-transparent dark name pills in the bottom-left of each tile.
+      '[class*="nameTag"]{',
+      '  background-color: rgba(0, 0, 0, 0.5) !important;',
+      '  color: #ffffff !important;',
+      '  box-shadow: none !important;',
+      '}',
+      // Bot / audio-only tile avatar: centered circle with initial fallback.
+      '[class*="tile"]:not([class*="videoMuted"]) [class*="avatar"],',
+      '[data-video-fit="cover"] [class*="avatar"]{',
+      '  display: flex !important;',
+      '  align-items: center !important;',
+      '  justify-content: center !important;',
+      '  width: 120px !important;',
+      '  height: 120px !important;',
+      '  border-radius: 50% !important;',
+      '  font-size: 48px !important;',
+      '  font-weight: 700 !important;',
+      '  color: #fff !important;',
+      '  overflow: hidden !important;',
+      '}',
+      '[class*="tile"]:not([class*="videoMuted"]) [class*="avatar"] img,',
+      '[data-video-fit="cover"] [class*="avatar"] img{',
+      '  width: 100% !important;',
+      '  height: 100% !important;',
+      '  object-fit: cover !important;',
+      '  border-radius: 50% !important;',
+      '}',
+    ].join('\n');
+    this.document.head.appendChild(style);
   }
 
   private observeControls() {
@@ -272,13 +361,60 @@ export class CallControl extends EventEmitter implements CallControlState {
 
   public toggleReactions() {
     this.reactionsButton?.click();
+    this.reactionsOpen = !this.reactionsOpen;
+
+    if (this.reactionsOpen) {
+      const handler = (evt: MouseEvent | KeyboardEvent) => {
+        if (evt instanceof KeyboardEvent && evt.key === 'Escape') {
+          this.toggleReactions();
+          return;
+        }
+        if (evt instanceof MouseEvent) {
+          const target = evt.target as HTMLElement;
+          if (!this.iframe.contains(target)) {
+            this.toggleReactions();
+          }
+        }
+      };
+      this.reactionsCloseHandler = () => {
+        window.removeEventListener('click', handler, true);
+        window.removeEventListener('keydown', handler, true);
+      };
+      window.addEventListener('click', handler, true);
+      window.addEventListener('keydown', handler, true);
+    } else {
+      this.reactionsCloseHandler?.();
+      this.reactionsCloseHandler = undefined;
+    }
   }
+
+  private settingsOpen = false;
+
+  private settingsCloseHandler: (() => void) | undefined;
 
   public toggleSettings() {
     this.settingsButton?.click();
+    this.settingsOpen = !this.settingsOpen;
+
+    if (this.settingsOpen) {
+      const handler = (evt: KeyboardEvent) => {
+        if (evt.key === 'Escape') {
+          this.toggleSettings();
+        }
+      };
+      this.settingsCloseHandler = () => {
+        window.removeEventListener('keydown', handler, true);
+      };
+      window.addEventListener('keydown', handler, true);
+    } else {
+      this.settingsCloseHandler?.();
+      this.settingsCloseHandler = undefined;
+    }
   }
 
   public dispose() {
+    this.reactionsCloseHandler?.();
+    this.settingsCloseHandler?.();
     this.bodyMutationObserver.disconnect();
     this.controlMutationObserver.disconnect();
   }

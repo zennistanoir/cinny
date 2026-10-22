@@ -56,6 +56,7 @@ import { useRoomName } from '../../../hooks/useRoomMeta';
 import { useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+import { PageNavFooter } from '../../../components/page-nav-footer';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
@@ -535,6 +536,7 @@ export function Space() {
           </NavCategory>
         </Box>
       </PageNavContent>
+      <PageNavFooter />
     </PageNav>
   );
 }

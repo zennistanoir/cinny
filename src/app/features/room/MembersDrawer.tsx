@@ -57,7 +57,7 @@ import { MemberSortMenu } from '../../components/MemberSortMenu';
 import { useOpenUserRoomProfile, useUserRoomProfileState } from '../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+import { useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 
 type MemberDrawerHeaderProps = {
@@ -109,6 +109,7 @@ type MemberItemProps = {
   onClick: MouseEventHandler<HTMLButtonElement>;
   pressed?: boolean;
   typing?: boolean;
+  dimmed?: boolean;
 };
 function MemberItem({
   mx,
@@ -118,6 +119,7 @@ function MemberItem({
   onClick,
   pressed,
   typing,
+  dimmed,
 }: MemberItemProps) {
   const name =
     getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
@@ -135,7 +137,7 @@ function MemberItem({
       radii="400"
       onClick={onClick}
       before={
-        <Avatar size="200">
+        <Avatar size="200" className={dimmed ? css.MemberDimmedAvatar : undefined}>
           <UserAvatar
             userId={member.userId}
             src={avatarUrl ?? undefined}
@@ -153,7 +155,11 @@ function MemberItem({
       }
     >
       <Box grow="Yes">
-        <Text size="T400" truncate>
+        <Text
+          size="T400"
+          truncate
+          className={dimmed ? css.MemberDimmed : undefined}
+        >
           {name}
         </Text>
       </Box>
@@ -171,6 +177,16 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 const mxIdToName = (mxId: string) => getMxIdLocalPart(mxId) ?? mxId;
 const getRoomMemberStr: SearchItemStrGetter<RoomMember> = (m, query) =>
   getMemberSearchStr(m, query, mxIdToName);
+
+type MemberSection = {
+  id: string;
+  title: string;
+  members: RoomMember[];
+};
+
+type RenderItem =
+  | { type: 'header'; sectionId: string; title: string; count: number }
+  | { type: 'member'; member: RoomMember; dimmed: boolean };
 
 type MembersDrawerProps = {
   room: Room;
@@ -217,10 +233,93 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
 
   const processMembers = result ? result.items : filteredMembers;
 
-  const PLTagOrRoomMember = useFlattenPowerTagMembers(processMembers, getPowerTag);
+  // Build Discord-style role/presence sections. Each member lands in the first
+  // matching bucket: OWNER (room creators) → elevated power role → ONLINE → OFFLINE.
+  const sections = useMemo<MemberSection[]>(() => {
+    const owner: RoomMember[] = [];
+    const roleMembers = new Map<string, RoomMember[]>();
+    const roleOrder: string[] = [];
+    const online: RoomMember[] = [];
+    const offline: RoomMember[] = [];
+
+    processMembers.forEach((member) => {
+      if (creators.has(member.userId)) {
+        owner.push(member);
+        return;
+      }
+
+      const power = getPowerLevel(member.userId);
+      const usersDefault = powerLevels.users_default ?? 0;
+      const tagName = getPowerTag(member.userId).name;
+      const isElevated = power > usersDefault && tagName.toLowerCase() !== 'member';
+
+      if (isElevated) {
+        if (!roleMembers.has(tagName)) {
+          roleMembers.set(tagName, []);
+          roleOrder.push(tagName);
+        }
+        roleMembers.get(tagName)!.push(member);
+        return;
+      }
+
+      const presence = mx.getUser(member.userId)?.presence;
+      const isOnline = presence === 'online' || presence === 'unavailable';
+      if (isOnline) online.push(member);
+      else offline.push(member);
+    });
+
+    const list: MemberSection[] = [];
+    if (owner.length > 0) list.push({ id: 'owner', title: 'Owner', members: owner });
+    roleOrder.forEach((roleName) => {
+      const roleMembersList = roleMembers.get(roleName);
+      if (roleMembersList && roleMembersList.length > 0) {
+        list.push({ id: `role:${roleName}`, title: roleName, members: roleMembersList });
+      }
+    });
+    if (online.length > 0) list.push({ id: 'online', title: 'Online', members: online });
+    if (offline.length > 0) list.push({ id: 'offline', title: 'Offline', members: offline });
+
+    return list;
+  }, [processMembers, creators, getPowerLevel, getPowerTag, powerLevels, mx]);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleSection = useCallback((sectionId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  }, []);
+
+  const renderItems = useMemo<RenderItem[]>(() => {
+    // While searching, show a flat result list without sections.
+    if (result) {
+      return result.items.map((member) => ({
+        type: 'member' as const,
+        member,
+        dimmed: false,
+      }));
+    }
+
+    const items: RenderItem[] = [];
+    sections.forEach((section) => {
+      items.push({
+        type: 'header',
+        sectionId: section.id,
+        title: section.title.toUpperCase(),
+        count: section.members.length,
+      });
+      if (collapsed.has(section.id)) return;
+      section.members.forEach((member) => {
+        items.push({ type: 'member', member, dimmed: section.id === 'offline' });
+      });
+    });
+    return items;
+  }, [result, sections, collapsed]);
 
   const virtualizer = useVirtualizer({
-    count: PLTagOrRoomMember.length,
+    count: renderItems.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 40,
     overscan: 10,
@@ -384,44 +483,65 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
                 }}
               >
                 {virtualizer.getVirtualItems().map((vItem) => {
-                  const tagOrMember = PLTagOrRoomMember[vItem.index];
-                  if (!('userId' in tagOrMember)) {
+                  const item = renderItems[vItem.index];
+                  if (!item) return null;
+
+                  if (item.type === 'header') {
+                    const isCollapsed = collapsed.has(item.sectionId);
                     return (
-                      <Text
-                        style={{
-                          transform: `translateY(${vItem.start}px)`,
-                        }}
+                      <div
+                        key={`${room.roomId}-header-${item.sectionId}`}
+                        style={{ transform: `translateY(${vItem.start}px)` }}
                         data-index={vItem.index}
                         ref={virtualizer.measureElement}
-                        key={`${room.roomId}-${vItem.index}`}
-                        className={classNames(css.MembersGroupLabel, css.DrawerVirtualItem)}
-                        size="L400"
+                        className={css.DrawerVirtualItem}
                       >
-                        {tagOrMember.name}
-                      </Text>
+                        <Box
+                          className={css.MemberSectionHeader}
+                          alignItems="Center"
+                          justifyContent="SpaceBetween"
+                        >
+                          <button
+                            type="button"
+                            className={css.MemberSectionHeaderBtn}
+                            onClick={() => toggleSection(item.sectionId)}
+                            aria-expanded={!isCollapsed}
+                          >
+                            <Icon
+                              size="50"
+                              src={isCollapsed ? Icons.ChevronRight : Icons.ChevronBottom}
+                            />
+                            <Text as="span" size="T300" className={css.MemberSectionTitle}>
+                              {item.title}
+                            </Text>
+                            <Text as="span" size="T300" className={css.MemberSectionCount}>
+                              {item.count}
+                            </Text>
+                          </button>
+                        </Box>
+                      </div>
                     );
                   }
 
                   return (
                     <div
-                      style={{
-                        transform: `translateY(${vItem.start}px)`,
-                      }}
+                      style={{ transform: `translateY(${vItem.start}px)` }}
                       className={css.DrawerVirtualItem}
                       data-index={vItem.index}
-                      key={`${room.roomId}-${tagOrMember.userId}`}
+                      key={`${room.roomId}-${item.member.userId}`}
                       ref={virtualizer.measureElement}
                     >
                       <MemberItem
                         mx={mx}
                         useAuthentication={useAuthentication}
                         room={room}
-                        member={tagOrMember}
+                        member={item.member}
                         onClick={handleMemberClick}
-                        pressed={openProfileUserId === tagOrMember.userId}
+                        pressed={openProfileUserId === item.member.userId}
                         typing={typingMembers.some(
-                          (receipt) => receipt.userId === tagOrMember.userId
+                          (receipt) => receipt.userId === item.member.userId
                         )}
+                        dimmed={item.dimmed}
                       />
                     </div>
                   );

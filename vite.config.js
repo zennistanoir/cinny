@@ -81,6 +81,9 @@ export default defineConfig({
   server: {
     port: 8080,
     host: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
@@ -129,7 +132,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false, // Disabled to prevent Node.js memory crashes on massive bundle sizes
     copyPublicDir: false,
     rollupOptions: {
       plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],

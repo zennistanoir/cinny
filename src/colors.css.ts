@@ -197,6 +197,105 @@ const darkThemeData = {
 
 export const darkTheme = createTheme(color, darkThemeData);
 
+const violetThemeData = {
+  Background: {
+    Container: '#0A0A0C',
+    ContainerHover: '#141418',
+    ContainerActive: '#1C1C22',
+    ContainerLine: '#26262E',
+    OnContainer: '#E8E6F0',
+  },
+
+  Surface: {
+    Container: '#141418',
+    ContainerHover: '#1C1C22',
+    ContainerActive: '#26262E',
+    ContainerLine: '#303038',
+    OnContainer: '#E8E6F0',
+  },
+
+  SurfaceVariant: {
+    Container: '#0F0F12',
+    ContainerHover: '#141418',
+    ContainerActive: '#1C1C22',
+    ContainerLine: '#26262E',
+    OnContainer: '#E8E6F0',
+  },
+
+  Primary: {
+    Main: '#8B5CF6',
+    MainHover: '#7C3AED',
+    MainActive: '#6D28D9',
+    MainLine: '#5B21B6',
+    OnMain: '#FFFFFF',
+    Container: '#2D1B69',
+    ContainerHover: '#35207A',
+    ContainerActive: '#3D258B',
+    ContainerLine: '#452B9C',
+    OnContainer: '#D4C8FB',
+  },
+
+  Secondary: {
+    Main: '#FFFFFF',
+    MainHover: '#E8E6F0',
+    MainActive: '#D5D2E3',
+    MainLine: '#C2BED6',
+    OnMain: '#0A0A0C',
+    Container: '#26262E',
+    ContainerHover: '#303038',
+    ContainerActive: '#3A3A44',
+    ContainerLine: '#444450',
+    OnContainer: '#E8E6F0',
+  },
+
+  Success: {
+    Main: '#23A55A',
+    MainHover: '#27B863',
+    MainActive: '#2CC96C',
+    MainLine: '#32DA75',
+    OnMain: '#FFFFFF',
+    Container: '#0F3D20',
+    ContainerHover: '#124825',
+    ContainerActive: '#15522A',
+    ContainerLine: '#185D2F',
+    OnContainer: '#B8EDCC',
+  },
+
+  Warning: {
+    Main: '#E8B44F',
+    MainHover: '#EBBD62',
+    MainActive: '#EDC674',
+    MainLine: '#F0CE86',
+    OnMain: '#0A0A0C',
+    Container: '#4D3A15',
+    ContainerHover: '#5C4419',
+    ContainerActive: '#6B4E1D',
+    ContainerLine: '#7A5821',
+    OnContainer: '#F5E2C7',
+  },
+
+  Critical: {
+    Main: '#DA373C',
+    MainHover: '#E14D52',
+    MainActive: '#E66367',
+    MainLine: '#EB797D',
+    OnMain: '#FFFFFF',
+    Container: '#3D1113',
+    ContainerHover: '#4A1517',
+    ContainerActive: '#56191B',
+    ContainerLine: '#631D1F',
+    OnContainer: '#F8C7C9',
+  },
+
+  Other: {
+    FocusRing: 'rgba(139, 92, 246, 0.5)',
+    Shadow: 'rgba(0, 0, 0, 1)',
+    Overlay: 'rgba(0, 0, 0, 0.8)',
+  },
+};
+
+export const violetTheme = createTheme(color, violetThemeData);
+
 export const butterTheme = createTheme(color, {
   ...darkThemeData,
   Background: {

@@ -17,6 +17,7 @@ import App from './app/pages/App';
 import './app/i18n';
 import { pushSessionToSW } from './sw-session';
 import { getFallbackSession } from './app/state/sessions';
+import { checkForZennithUpdates } from './util/updater';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -51,6 +52,9 @@ const mountApp = () => {
     console.error('Root container element not found!');
     return;
   }
+
+  // Trigger the private GitHub updater check on app launch
+  checkForZennithUpdates();
 
   const root = createRoot(rootContainer);
   root.render(<App />);

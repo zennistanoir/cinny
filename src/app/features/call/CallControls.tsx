@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, useCallback, useRef, useState } from 'react';
+import React, { MouseEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -12,21 +12,18 @@ import {
   RectCords,
   Spinner,
   Text,
-  toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../components/sequence-card';
 import * as css from './styles.css';
 import {
   ChatButton,
-  ControlDivider,
   MicrophoneButton,
   ScreenShareButton,
   SoundButton,
   VideoButton,
 } from './Controls';
 import { CallEmbed, useCallControlState } from '../../plugins/call';
-import { useResizeObserver } from '../../hooks/useResizeObserver';
 import { stopPropagation } from '../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 
@@ -35,22 +32,33 @@ type CallControlsProps = {
 };
 export function CallControls({ callEmbed }: CallControlsProps) {
   const controlRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(document.body.clientWidth < 500);
-
-  useResizeObserver(
-    useCallback(() => {
-      const element = controlRef.current;
-      if (!element) return;
-      setCompact(element.clientWidth < 500);
-    }, []),
-    useCallback(() => controlRef.current, [])
-  );
 
   const { microphone, video, sound, screenshare, spotlight } = useCallControlState(
     callEmbed.control
   );
 
   const [cords, setCords] = useState<RectCords>();
+  const [visible, setVisible] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const hoveringRef = useRef(false);
+
+  // Auto-hide after 3 seconds of no mouse movement
+  useEffect(() => {
+    const resetTimer = () => {
+      setVisible(true);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => {
+        if (!hoveringRef.current) setVisible(false);
+      }, 3000);
+    };
+
+    resetTimer();
+    window.addEventListener('mousemove', resetTimer);
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setCords(evt.currentTarget.getBoundingClientRect());
@@ -86,120 +94,111 @@ export function CallControls({ callEmbed }: CallControlsProps) {
       className={css.CallControlContainer}
       justifyContent="Center"
       alignItems="Center"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(20px)',
+        transition: 'opacity 0.3s ease, transform 0.3s ease',
+        pointerEvents: visible ? 'auto' : 'none',
+      }}
+      onMouseEnter={() => { hoveringRef.current = true; }}
+      onMouseLeave={() => { hoveringRef.current = false; }}
     >
       <SequenceCard
         className={css.ControlCard}
         variant="SurfaceVariant"
-        gap="400"
+        gap="300"
         radii="500"
         alignItems="Center"
-        justifyContent="SpaceBetween"
       >
-        <Box alignItems="Center" gap="Inherit" grow="Yes" direction={compact ? 'Column' : 'Row'}>
-          <Box shrink="No" alignItems="Inherit" justifyContent="Inherit" gap="200">
-            <MicrophoneButton
-              enabled={microphone}
-              onToggle={handleMicrophoneToggle}
-            />
-            <SoundButton enabled={sound} onToggle={() => callEmbed.control.toggleSound()} />
-          </Box>
-          {!compact && <ControlDivider />}
-          <Box shrink="No" alignItems="Inherit" justifyContent="Inherit" gap="200">
-            <VideoButton enabled={video} onToggle={handleVideoToggle} />
-            <ScreenShareButton
-              enabled={screenshare}
-              onToggle={() => callEmbed.control.toggleScreenshare()}
-            />
-          </Box>
-        </Box>
-        {!compact && <ControlDivider />}
-        <Box alignItems="Center" gap="Inherit" grow="Yes" direction={compact ? 'Column' : 'Row'}>
-          <Box shrink="No" alignItems="Inherit" justifyContent="Inherit" gap="200">
-            <ChatButton />
-            <PopOut
-              anchor={cords}
-              position="Top"
-              align="Center"
-              content={
-                <FocusTrap
-                  focusTrapOptions={{
-                    initialFocus: false,
-                    onDeactivate: () => setCords(undefined),
-                    clickOutsideDeactivates: true,
-                    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-                    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-                    escapeDeactivates: stopPropagation,
-                  }}
-                >
-                  <Menu>
-                    <Box direction="Column" style={{ padding: config.space.S100 }}>
-                      <MenuItem
-                        size="300"
-                        variant="Surface"
-                        radii="300"
-                        onClick={handleSpotlightClick}
-                      >
-                        <Text size="B300" truncate>
-                          {spotlight ? 'Grid View' : 'Spotlight View'}
-                        </Text>
-                      </MenuItem>
-                      <MenuItem
-                        size="300"
-                        variant="Surface"
-                        radii="300"
-                        onClick={handleReactionsClick}
-                      >
-                        <Text size="B300" truncate>
-                          Reactions
-                        </Text>
-                      </MenuItem>
-                      <MenuItem
-                        size="300"
-                        variant="Surface"
-                        radii="300"
-                        onClick={handleSettingsClick}
-                      >
-                        <Text size="B300" truncate>
-                          Settings
-                        </Text>
-                      </MenuItem>
-                    </Box>
-                  </Menu>
-                </FocusTrap>
-              }
+        <MicrophoneButton enabled={microphone} onToggle={handleMicrophoneToggle} />
+        <SoundButton enabled={sound} onToggle={() => callEmbed.control.toggleSound()} />
+        <VideoButton enabled={video} onToggle={handleVideoToggle} />
+        <ScreenShareButton
+          enabled={screenshare}
+          onToggle={() => callEmbed.control.toggleScreenshare()}
+        />
+        <ChatButton />
+        <Button
+          variant="Critical"
+          fill="Solid"
+          radii="Pill"
+          style={{ backgroundColor: '#f23f43', color: '#ffffff' }}
+          onClick={hangup}
+          before={
+            exiting ? (
+              <Spinner variant="Critical" fill="Solid" size="200" />
+            ) : (
+              <Icon src={Icons.PhoneDown} size="200" filled />
+            )
+          }
+          disabled={exiting}
+        >
+          <Text size="B400">End</Text>
+        </Button>
+        <PopOut
+          anchor={cords}
+          position="Top"
+          align="Center"
+          content={
+            <FocusTrap
+              focusTrapOptions={{
+                initialFocus: false,
+                onDeactivate: () => setCords(undefined),
+                clickOutsideDeactivates: true,
+                isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                escapeDeactivates: stopPropagation,
+              }}
             >
-              <IconButton
-                variant="Surface"
-                fill="Soft"
-                radii="400"
-                size="400"
-                onClick={handleOpenMenu}
-                outlined
-                aria-pressed={!!cords}
-              >
-                <Icon size="400" src={Icons.VerticalDots} />
-              </IconButton>
-            </PopOut>
-          </Box>
-          <Box shrink="No" direction="Column">
-            <Button
-              style={{ minWidth: toRem(88) }}
-              variant="Critical"
-              fill="Solid"
-              onClick={hangup}
-              before={
-                exiting ? (
-                  <Spinner variant="Critical" fill="Solid" size="200" />
-                ) : (
-                  <Icon src={Icons.PhoneDown} size="200" filled />
-                )
-              }
-              disabled={exiting}
-            >
-              <Text size="B400">End</Text>
-            </Button>
-          </Box>
-        </Box>
+              <Menu>
+                <Box direction="Column" style={{ padding: config.space.S100 }}>
+                  <MenuItem
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    onClick={handleSpotlightClick}
+                  >
+                    <Text size="B300" truncate>
+                      {spotlight ? 'Grid View' : 'Spotlight View'}
+                    </Text>
+                  </MenuItem>
+                  <MenuItem
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    onClick={handleReactionsClick}
+                  >
+                    <Text size="B300" truncate>
+                      Reactions
+                    </Text>
+                  </MenuItem>
+                  <MenuItem
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    onClick={handleSettingsClick}
+                  >
+                    <Text size="B300" truncate>
+                      Settings
+                    </Text>
+                  </MenuItem>
+                </Box>
+              </Menu>
+            </FocusTrap>
+          }
+        >
+          <IconButton
+            variant="Surface"
+            fill="Soft"
+            radii="400"
+            size="400"
+            onClick={handleOpenMenu}
+            outlined
+            aria-pressed={!!cords}
+          >
+            <Icon size="400" src={Icons.VerticalDots} />
+          </IconButton>
+        </PopOut>
       </SequenceCard>
     </Box>
   );

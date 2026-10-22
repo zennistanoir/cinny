@@ -9,13 +9,12 @@ export const AvatarPresence = style({
 
 export const AvatarPresenceBadge = style({
   position: 'absolute',
-  bottom: 0,
-  right: 0,
-  transform: 'translate(25%, 25%)',
+  bottom: '-2px',
+  right: '-2px',
   zIndex: 1,
 
   display: 'flex',
-  padding: config.borderWidth.B600,
+  padding: config.borderWidth.B500,
   backgroundColor: 'inherit',
   borderRadius: config.radii.Pill,
   overflow: 'hidden',

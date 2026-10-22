@@ -56,6 +56,88 @@ import { getRoomPermissionsAPI } from '../hooks/useRoomPermissions';
 import { useLivekitSupport } from '../hooks/useLivekitSupport';
 import { CallAvatarAnimation } from '../styles/Animations.css';
 import { webRTCSupported } from '../utils/rtc';
+import { isKeyHotkey } from 'is-hotkey';
+import { useSetting } from '../state/hooks/settings';
+import { settingsAtom } from '../state/settings';
+
+function GlobalKeybindsListener() {
+  const callEmbed = useAtomValue(callEmbedAtom);
+  const [toggleMute] = useSetting(settingsAtom, 'keybindToggleMute');
+  const [toggleDeafen] = useSetting(settingsAtom, 'keybindToggleDeafen');
+  const [pushToTalk] = useSetting(settingsAtom, 'keybindPushToTalk');
+  const prevMicRef = useRef<boolean | null>(null);
+
+  // Store latest values in refs so the listener never re-registers
+  // when dependencies change (room navigation, settings updates, etc.).
+  const callEmbedRef = useRef(callEmbed);
+  const toggleMuteRef = useRef(toggleMute);
+  const toggleDeafenRef = useRef(toggleDeafen);
+  const pushToTalkRef = useRef(pushToTalk);
+  callEmbedRef.current = callEmbed;
+  toggleMuteRef.current = toggleMute;
+  toggleDeafenRef.current = toggleDeafen;
+  pushToTalkRef.current = pushToTalk;
+
+  useEffect(() => {
+    const handleKeyDown = (evt: KeyboardEvent) => {
+      const ce = callEmbedRef.current;
+      if (!ce) return;
+      const target = evt.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        (target as HTMLElement).isContentEditable
+      )
+        return;
+
+      const tm = toggleMuteRef.current;
+      const td = toggleDeafenRef.current;
+      const pt = pushToTalkRef.current;
+
+      if (tm && isKeyHotkey(tm, evt)) {
+        evt.preventDefault();
+        ce.control.toggleMicrophone();
+      }
+      if (td && isKeyHotkey(td, evt)) {
+        evt.preventDefault();
+        ce.control.toggleSound();
+      }
+      if (pt && isKeyHotkey(pt, evt)) {
+        evt.preventDefault();
+        if (prevMicRef.current === null) {
+          prevMicRef.current = ce.control.microphone;
+          if (!ce.control.microphone) {
+            ce.control.toggleMicrophone();
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (evt: KeyboardEvent) => {
+      const ce = callEmbedRef.current;
+      const pt = pushToTalkRef.current;
+      if (!ce || !pt) return;
+      if (isKeyHotkey(pt, evt)) {
+        if (prevMicRef.current !== null) {
+          const wasMuted = !prevMicRef.current;
+          prevMicRef.current = null;
+          if (wasMuted) {
+            ce.control.toggleMicrophone();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []); // Mount once — never re-register
+
+  return null;
+}
 
 type IncomingCallInfo = {
   room: Room;
@@ -386,17 +468,25 @@ export function CallEmbedProvider({ children }: CallEmbedProviderProps) {
       {callEmbed && <CallUtils embed={callEmbed} />}
       <CallEmbedRefContextProvider value={callEmbedRef}>
         <IncomingCallListener callEmbed={callEmbed} joined={joined} />
+        <GlobalKeybindsListener />
         {children}
       </CallEmbedRefContextProvider>
       <div
         data-call-embed-container
         style={{
+          // The call embed must never spawn a full-screen overlay that blocks
+          // navigation. It starts at 0x0 and is sized into the room's call view
+          // by `useCallEmbedPlacementSync`; `pointer-events: none` guarantees the
+          // embedded iframe never intercepts clicks (all controls are driven by
+          // Zennith's own pill bar + status card).
           visibility: callVisible ? undefined : 'hidden',
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '50%',
+          width: 0,
+          height: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
         }}
         ref={callEmbedRef}
       />
