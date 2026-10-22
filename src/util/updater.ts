@@ -5,7 +5,7 @@ export async function checkForZennithUpdates() {
   try {
     const update = await check({
       headers: {
-        Authorization: "Bearer YOUR_GITHUB_TOKEN_HERE"
+        Authorization: `Bearer ${import.meta.env.VITE_GITHUB_TOKEN}`
       }
     });
 
