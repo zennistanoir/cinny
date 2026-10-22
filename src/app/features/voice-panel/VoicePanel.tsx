@@ -9,6 +9,32 @@ function pingColor(ping: number): string {
   return '#ff4d4d';
 }
 
+function getSignalBars(pingMs: number | null) {
+  if (pingMs === null || pingMs < 100) return { bars: 3, color: '#23a55a' };
+  if (pingMs < 250) return { bars: 2, color: '#f0b232' };
+  return { bars: 1, color: '#f23f43' };
+}
+
+function SignalQualityMeter({ ping }: { ping: number | null }) {
+  const { bars, color } = getSignalBars(ping);
+  const heights = [4, 8, 12];
+
+  return (
+    <div className={css.SignalMeter}>
+      {heights.map((h, i) => (
+        <div
+          key={i}
+          className={css.SignalBar}
+          style={{
+            height: `${h}px`,
+            backgroundColor: i < bars ? color : 'rgba(255,255,255,0.15)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function VoicePanel() {
   const callEmbed = useCallEmbed();
   const joined = useCallJoined(callEmbed);
@@ -96,6 +122,7 @@ export function VoicePanel() {
           </Text>
         </Box>
         <Box className={css.LatencyBadge} shrink="No" style={{ color: dotColor }}>
+          <SignalQualityMeter ping={currentPing} />
           <span>{currentPing !== null ? `${currentPing} ms` : '-- ms'}</span>
         </Box>
       </Box>

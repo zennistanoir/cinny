@@ -29,3 +29,16 @@ export const LatencyBadge = style({
   fontSize: '0.75rem',
   fontFamily: 'monospace',
 });
+
+export const SignalMeter = style({
+  display: 'flex',
+  alignItems: 'flex-end',
+  gap: '1px',
+  height: '12px',
+});
+
+export const SignalBar = style({
+  width: '3px',
+  borderRadius: '1px',
+  flexShrink: 0,
+});

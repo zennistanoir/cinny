@@ -67,9 +67,21 @@ function GlobalKeybindsListener() {
   const [pushToTalk] = useSetting(settingsAtom, 'keybindPushToTalk');
   const prevMicRef = useRef<boolean | null>(null);
 
+  // Store latest values in refs so the listener never re-registers
+  // when dependencies change (room navigation, settings updates, etc.).
+  const callEmbedRef = useRef(callEmbed);
+  const toggleMuteRef = useRef(toggleMute);
+  const toggleDeafenRef = useRef(toggleDeafen);
+  const pushToTalkRef = useRef(pushToTalk);
+  callEmbedRef.current = callEmbed;
+  toggleMuteRef.current = toggleMute;
+  toggleDeafenRef.current = toggleDeafen;
+  pushToTalkRef.current = pushToTalk;
+
   useEffect(() => {
     const handleKeyDown = (evt: KeyboardEvent) => {
-      if (!callEmbed) return;
+      const ce = callEmbedRef.current;
+      if (!ce) return;
       const target = evt.target as HTMLElement;
       if (
         target.tagName === 'INPUT' ||
@@ -78,33 +90,39 @@ function GlobalKeybindsListener() {
       )
         return;
 
-      if (toggleMute && isKeyHotkey(toggleMute, evt)) {
+      const tm = toggleMuteRef.current;
+      const td = toggleDeafenRef.current;
+      const pt = pushToTalkRef.current;
+
+      if (tm && isKeyHotkey(tm, evt)) {
         evt.preventDefault();
-        callEmbed.control.toggleMicrophone();
+        ce.control.toggleMicrophone();
       }
-      if (toggleDeafen && isKeyHotkey(toggleDeafen, evt)) {
+      if (td && isKeyHotkey(td, evt)) {
         evt.preventDefault();
-        callEmbed.control.toggleSound();
+        ce.control.toggleSound();
       }
-      if (pushToTalk && isKeyHotkey(pushToTalk, evt)) {
+      if (pt && isKeyHotkey(pt, evt)) {
         evt.preventDefault();
         if (prevMicRef.current === null) {
-          prevMicRef.current = callEmbed.control.microphone;
-          if (!callEmbed.control.microphone) {
-            callEmbed.control.toggleMicrophone();
+          prevMicRef.current = ce.control.microphone;
+          if (!ce.control.microphone) {
+            ce.control.toggleMicrophone();
           }
         }
       }
     };
 
     const handleKeyUp = (evt: KeyboardEvent) => {
-      if (!callEmbed || !pushToTalk) return;
-      if (isKeyHotkey(pushToTalk, evt)) {
+      const ce = callEmbedRef.current;
+      const pt = pushToTalkRef.current;
+      if (!ce || !pt) return;
+      if (isKeyHotkey(pt, evt)) {
         if (prevMicRef.current !== null) {
           const wasMuted = !prevMicRef.current;
           prevMicRef.current = null;
           if (wasMuted) {
-            callEmbed.control.toggleMicrophone();
+            ce.control.toggleMicrophone();
           }
         }
       }
@@ -116,7 +134,7 @@ function GlobalKeybindsListener() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [callEmbed, toggleMute, toggleDeafen, pushToTalk]);
+  }, []); // Mount once — never re-register
 
   return null;
 }

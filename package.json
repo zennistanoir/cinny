@@ -1,6 +1,6 @@
 {
   "name": "zennith",
-  "version": "4.12.7",
+  "version": "0.1.0",
   "description": "A minimalistic, futuristic Matrix client",
   "main": "index.js",
   "type": "module",
@@ -10,6 +10,7 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
+    "tauri": "tauri",
     "preview": "vite preview",
     "lint": "npm run check:eslint && npm run check:prettier",
     "check:eslint": "eslint src/*",
@@ -40,6 +41,8 @@
     "@tanstack/react-query": "5.24.1",
     "@tanstack/react-query-devtools": "5.24.1",
     "@tanstack/react-virtual": "3.2.0",
+    "@tauri-apps/plugin-process": "2.4.0",
+    "@tauri-apps/plugin-updater": "2.14.0",
     "@vanilla-extract/css": "1.9.3",
     "@vanilla-extract/recipes": "0.3.0",
     "@vanilla-extract/vite-plugin": "3.7.1",
@@ -94,6 +97,7 @@
     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
     "@rollup/plugin-inject": "5.0.3",
     "@rollup/plugin-wasm": "6.1.1",
+    "@tauri-apps/cli": "2.12.4",
     "@types/chroma-js": "3.1.1",
     "@types/file-saver": "2.0.5",
     "@types/is-hotkey": "0.1.10",

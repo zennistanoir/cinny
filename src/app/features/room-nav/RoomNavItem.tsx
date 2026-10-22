@@ -554,7 +554,7 @@ export function RoomNavItem({
         </NavLink>
 
         {/* 2. Connected Users Tree — STRICTLY OUTSIDE AND BELOW THE HEADER */}
-        {callMembers.length > 0 && selected && (
+        {callMembers.length > 0 && (
           <div className="zennith-voice-user-tree">
             {callMembers.slice(0, 10).map((member) => (
               <CallMemberSubItem

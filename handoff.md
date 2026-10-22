@@ -1,6 +1,6 @@
 # Zennith Handoff
 
-> Last updated: 2026-10-20 — Session: Bug fixes, voice tree reconstruction, keybind recorder
+> Last updated: 2026-10-20 — Session: open registration (no token) + 3 deferred fixes parked for next time
 
 ---
 
@@ -129,6 +129,12 @@ Deploy target: `E:\Matrix-Claude\data\cinny\`
 - Finds RTCPeerConnection from `<video>/<audio>` elements' `srcObject`
 - Reads `currentRoundTripTime * 1000` → live ping display
 
+### Round 7 — Server config (Matrix-Claude repo, not cinny-fork)
+- Disabled registration token requirement: `data/synapse/homeserver.yaml` → `registration_requires_token: false` (was `true`)
+- Added `enable_registration_without_verification: true` (Synapse 1.125 refuses open registration without it)
+- `enable_registration: true` + `registration_requires_3pid: false` → invitees can self-register with username/password, no token/email
+- Restarted `synapse` container; verified healthy
+
 ---
 
 ## 5. Failed Attempts
@@ -154,6 +160,12 @@ Even with the column wrapper, if avatars share a flex container with the channel
 ---
 
 ## 6. Next Steps
+
+### Open To-Do (deferred this session — pick up here next time)
+
+- [ ] **Hotkey doesn't work when focus is in the call's empty space.** Root cause: `GlobalKeybindsListener` (in `src/app/components/CallEmbedProvider.tsx`) only adds `keydown`/`keyup` on the parent `window`. When the user clicks empty space inside the Element Call iframe, focus moves into the iframe's own browsing context, so keydown never reaches the parent. Fix: also attach `keydown`/`keyup` to `callEmbed.iframe.contentWindow` (capture phase `true`) in a separate `useEffect` keyed on `[callEmbed]`; hoist `handleKeyDown`/`handleKeyUp` into `useCallback` (empty deps) so both scopes share them.
+- [ ] **Zennify's bot avatar 404s.** Root cause found: `GET /profile/@zennify:zennandfriends.com` returns `avatar_url: mxc://zennandfriends.com/EyurPsKNDAUGKRrAxxNkZwWK`, but `/_matrix/media/v3/download` + `/thumbnail` for that ID return `404 M_NOT_FOUND`. The PNG exists on disk at `data/synapse/media_store/local_content/Ey/ur/PsKNDAUGKRrAxxNkZwWK` (valid 600×600 PNG) — the DB media record is missing. Fix: re-upload the same bytes via `POST /_matrix/media/v3/upload` (Bearer admin/bot token), then `PUT /_matrix/client/v3/profile/@zennify:zennandfriends.com/avatar_url` with the new `content_uri`. (Note: `.env` `ZENNIFY_BOT_ACCESS_TOKEN` looks malformed — two tokens concatenated; the valid single token lives in `data/zennify/config/config.toml`.)
+- [ ] **Maximize the user's shared-screen stream.** Not started (flagged high-risk for breaking the call UI interaction).
 
 ### Immediate (if building more features)
 - [ ] Speaking indicator green ring on sidebar avatars (needs `useCallSpeakers` hook integration)

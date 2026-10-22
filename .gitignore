@@ -5,3 +5,12 @@ devAssets
 
 .DS_Store
 .idea
+# Security Keys & Secrets
+*.key
+*.pub
+*.pem
+.env
+.env.*
+
+# Tauri Build Target
+src-tauri/target/
