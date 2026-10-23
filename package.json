@@ -1,7 +1,7 @@
 {
   "name": "zennith",
   "version": "0.1.3",
-  "description": "A minimalistic, futuristic Matrix client",
+  "description": "Zenn's Forked Cinny Client",
   "main": "index.js",
   "type": "module",
   "engines": {
