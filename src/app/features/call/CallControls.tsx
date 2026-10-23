@@ -26,6 +26,8 @@ import {
 import { CallEmbed, useCallControlState } from '../../plugins/call';
 import { stopPropagation } from '../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 
 type CallControlsProps = {
   callEmbed: CallEmbed;
@@ -38,6 +40,7 @@ export function CallControls({ callEmbed }: CallControlsProps) {
   );
 
   const [cords, setCords] = useState<RectCords>();
+  const [noiseSuppression, setNoiseSuppression] = useSetting(settingsAtom, 'noiseSuppression');
   const [visible, setVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const hoveringRef = useRef(false);
@@ -71,6 +74,16 @@ export function CallControls({ callEmbed }: CallControlsProps) {
 
   const handleReactionsClick = () => {
     callEmbed.control.toggleReactions();
+    setCords(undefined);
+  };
+
+  const handleMaximizeClick = () => {
+    callEmbed.control.maximizeStream();
+    setCords(undefined);
+  };
+
+  const handleNoiseSuppressionClick = () => {
+    setNoiseSuppression(!noiseSuppression);
     setCords(undefined);
   };
 
@@ -166,10 +179,31 @@ export function CallControls({ callEmbed }: CallControlsProps) {
                     size="300"
                     variant="Surface"
                     radii="300"
+                    onClick={handleMaximizeClick}
+                  >
+                    <Text size="B300" truncate>
+                      Maximize Stream
+                    </Text>
+                  </MenuItem>
+                  <MenuItem
+                    size="300"
+                    variant="Surface"
+                    radii="300"
                     onClick={handleReactionsClick}
                   >
                     <Text size="B300" truncate>
                       Reactions
+                    </Text>
+                  </MenuItem>
+                  <MenuItem
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    onClick={handleNoiseSuppressionClick}
+                    aria-pressed={noiseSuppression}
+                  >
+                    <Text size="B300" truncate>
+                      {noiseSuppression ? 'Noise Suppression: On' : 'Noise Suppression: Off'}
                     </Text>
                   </MenuItem>
                   <MenuItem

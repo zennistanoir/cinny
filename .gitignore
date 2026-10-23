@@ -11,6 +11,9 @@ devAssets
 *.pem
 .env
 .env.*
+# Literal "~" dir created by an unexpanded `tauri signer generate -w ~/...` (holds the updater signing key)
+/~/
+leak-report.json
 
 # Tauri Build Target
 src-tauri/target/

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
-import CinnySVG from '../../../../public/res/svg/cinny.svg';
+import LogoPNG from '../../../../public/logo.png';
+import { version } from '../../../../package.json';
 
 export function WelcomePage() {
   return (
@@ -14,17 +15,17 @@ export function WelcomePage() {
       >
         <PageHeroSection>
           <PageHero
-            icon={<img width="70" height="70" src={CinnySVG} alt="Zennith Logo" />}
+            icon={<img width="70" height="70" src={LogoPNG} alt="Zennith Logo" />}
             title="Welcome to Zennith"
             subTitle={
               <span>
-                A minimalistic, futuristic Matrix client.{' '}
+                Zenn&apos;s Forked Cinny Client!{' '}
                 <a
-                  href="https://github.com/cinnyapp/cinny/releases"
+                  href="https://github.com/zennistanoir/cinny/releases"
                   target="_blank"
                   rel="noreferrer noopener"
                 >
-                  v4.12.7
+                  v{version}
                 </a>
               </span>
             }
@@ -33,25 +34,13 @@ export function WelcomePage() {
               <Box grow="Yes" style={{ maxWidth: toRem(300) }} direction="Column" gap="300">
                 <Button
                   as="a"
-                  href="https://github.com/cinnyapp/cinny"
+                  href="https://github.com/zennistanoir/cinny"
                   target="_blank"
                   rel="noreferrer noopener"
                   before={<Icon size="200" src={Icons.Code} />}
                 >
                   <Text as="span" size="B400" truncate>
                     Source Code
-                  </Text>
-                </Button>
-                <Button
-                  as="a"
-                  href="https://cinny.in/#sponsor"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  fill="Soft"
-                  before={<Icon size="200" src={Icons.Heart} />}
-                >
-                  <Text as="span" size="B400" truncate>
-                    Support
                   </Text>
                 </Button>
               </Box>

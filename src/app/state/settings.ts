@@ -51,6 +51,10 @@ export interface Settings {
   keybindToggleMute?: string;
   keybindToggleDeafen?: string;
   keybindPushToTalk?: string;
+  keybindToggleNoiseSuppression?: string;
+
+  noiseSuppression: boolean;
+  callToggleSounds: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -89,6 +93,10 @@ const defaultSettings: Settings = {
   keybindToggleMute: 'ctrl+shift+m',
   keybindToggleDeafen: 'ctrl+shift+d',
   keybindPushToTalk: 'ctrl+shift+space',
+  keybindToggleNoiseSuppression: 'ctrl+shift+x',
+
+  noiseSuppression: true,
+  callToggleSounds: true,
 };
 
 export const getSettings = () => {

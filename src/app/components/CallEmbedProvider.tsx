@@ -57,31 +57,130 @@ import { useLivekitSupport } from '../hooks/useLivekitSupport';
 import { CallAvatarAnimation } from '../styles/Animations.css';
 import { webRTCSupported } from '../utils/rtc';
 import { isKeyHotkey } from 'is-hotkey';
-import { useSetting } from '../state/hooks/settings';
+import { useSetSetting, useSetting } from '../state/hooks/settings';
 import { settingsAtom } from '../state/settings';
+import '../plugins/call/iframeMedia';
+import { setNoiseSuppressionEnabled } from '../plugins/call/noiseSuppression';
+import { CallControlEvent } from '../plugins/call/CallControl';
+import { playToggleSound } from '../plugins/call/toggleSounds';
+
+function NoiseSuppressionSync() {
+  const [noiseSuppression] = useSetting(settingsAtom, 'noiseSuppression');
+  const [toggleSounds] = useSetting(settingsAtom, 'callToggleSounds');
+  const prevRef = useRef(noiseSuppression);
+
+  useEffect(() => {
+    setNoiseSuppressionEnabled(noiseSuppression);
+    // Cue only real changes (call menu or settings), not the initial value.
+    if (prevRef.current !== noiseSuppression && toggleSounds) {
+      playToggleSound(noiseSuppression ? 'noiseSuppressionOn' : 'noiseSuppressionOff');
+    }
+    prevRef.current = noiseSuppression;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noiseSuppression]);
+
+  return null;
+}
+
+// Deafen also mutes the mic (and unmuting also undeafens) a moment later via
+// the widget API; only cue the action the user actually took.
+const LINKED_TOGGLE_WINDOW_MS = 1000;
+
+// Plays a cue on every mute / deafen change, whatever triggered it (call
+// controls, voice panel, profile card, keybinds, Element Call itself).
+function CallToggleSounds({ embed }: { embed: CallEmbed }) {
+  const joined = useCallJoined(embed);
+  const [enabled] = useSetting(settingsAtom, 'callToggleSounds');
+
+  useEffect(() => {
+    if (!joined || !enabled) return undefined;
+    const { control } = embed;
+    let { microphone, sound } = control;
+    let ignoreMicUntil = 0;
+    let ignoreSoundUntil = 0;
+
+    const handleUpdate = () => {
+      const now = Date.now();
+      if (control.sound !== sound) {
+        sound = control.sound;
+        if (now >= ignoreSoundUntil) {
+          playToggleSound(sound ? 'undeafen' : 'deafen');
+          ignoreMicUntil = now + LINKED_TOGGLE_WINDOW_MS;
+        }
+      }
+      if (control.microphone !== microphone) {
+        microphone = control.microphone;
+        if (now >= ignoreMicUntil) {
+          playToggleSound(microphone ? 'unmute' : 'mute');
+          ignoreSoundUntil = now + LINKED_TOGGLE_WINDOW_MS;
+        }
+      }
+    };
+
+    control.on(CallControlEvent.StateUpdate, handleUpdate);
+    return () => {
+      control.off(CallControlEvent.StateUpdate, handleUpdate);
+    };
+  }, [embed, joined, enabled]);
+
+  return null;
+}
+
+// Element Call gives every screen share (local or remote) a spotlight item with
+// a `data-id` ending in ":screen-share", in both grid and spotlight layouts.
+const SCREEN_SHARE_SELECTOR = '[data-id$=":screen-share"]';
+// Layout switches remount the spotlight tile; only cue a drop that sticks.
+const SCREEN_SHARE_SETTLE_MS = 600;
+
+// Plays a cue when any screen share in the call ends (Element Call already
+// plays its own sound when one starts).
+function ScreenShareEndedSound({ embed }: { embed: CallEmbed }) {
+  const joined = useCallJoined(embed);
+  const [enabled] = useSetting(settingsAtom, 'callToggleSounds');
+
+  useEffect(() => {
+    const doc = embed.document;
+    if (!joined || !enabled || !doc?.body) return undefined;
+
+    const count = () => doc.querySelectorAll(SCREEN_SHARE_SELECTOR).length;
+    let shares = count();
+    let settleTimer: number | undefined;
+
+    const observer = new MutationObserver(() => {
+      const current = count();
+      if (settleTimer !== undefined || current >= shares) {
+        shares = Math.max(shares, current);
+        return;
+      }
+      settleTimer = window.setTimeout(() => {
+        settleTimer = undefined;
+        const now = count();
+        if (now < shares) playToggleSound('screenShareEnded');
+        shares = now;
+      }, SCREEN_SHARE_SETTLE_MS);
+    });
+    observer.observe(doc.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(settleTimer);
+    };
+  }, [embed, joined, enabled]);
+
+  return null;
+}
 
 function GlobalKeybindsListener() {
   const callEmbed = useAtomValue(callEmbedAtom);
   const [toggleMute] = useSetting(settingsAtom, 'keybindToggleMute');
   const [toggleDeafen] = useSetting(settingsAtom, 'keybindToggleDeafen');
   const [pushToTalk] = useSetting(settingsAtom, 'keybindPushToTalk');
+  const [toggleNoiseSuppression] = useSetting(settingsAtom, 'keybindToggleNoiseSuppression');
+  const setNoiseSuppression = useSetSetting(settingsAtom, 'noiseSuppression');
   const prevMicRef = useRef<boolean | null>(null);
-
-  // Store latest values in refs so the listener never re-registers
-  // when dependencies change (room navigation, settings updates, etc.).
-  const callEmbedRef = useRef(callEmbed);
-  const toggleMuteRef = useRef(toggleMute);
-  const toggleDeafenRef = useRef(toggleDeafen);
-  const pushToTalkRef = useRef(pushToTalk);
-  callEmbedRef.current = callEmbed;
-  toggleMuteRef.current = toggleMute;
-  toggleDeafenRef.current = toggleDeafen;
-  pushToTalkRef.current = pushToTalk;
 
   useEffect(() => {
     const handleKeyDown = (evt: KeyboardEvent) => {
-      const ce = callEmbedRef.current;
-      if (!ce) return;
       const target = evt.target as HTMLElement;
       if (
         target.tagName === 'INPUT' ||
@@ -90,39 +189,49 @@ function GlobalKeybindsListener() {
       )
         return;
 
-      const tm = toggleMuteRef.current;
-      const td = toggleDeafenRef.current;
-      const pt = pushToTalkRef.current;
+      // Noise suppression is a setting, so its hotkey works outside calls too.
+      // The cue sound is played by NoiseSuppressionSync when the setting flips.
+      if (toggleNoiseSuppression && isKeyHotkey(toggleNoiseSuppression, evt)) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!evt.repeat) {
+          setNoiseSuppression((on) => !on);
+        }
+      }
 
-      if (tm && isKeyHotkey(tm, evt)) {
+      if (!callEmbed) return;
+
+      if (toggleMute && isKeyHotkey(toggleMute, evt)) {
         evt.preventDefault();
-        ce.control.toggleMicrophone();
+        evt.stopPropagation();
+        callEmbed.control.toggleMicrophone();
       }
-      if (td && isKeyHotkey(td, evt)) {
+      if (toggleDeafen && isKeyHotkey(toggleDeafen, evt)) {
         evt.preventDefault();
-        ce.control.toggleSound();
+        evt.stopPropagation();
+        callEmbed.control.toggleSound();
       }
-      if (pt && isKeyHotkey(pt, evt)) {
+      if (pushToTalk && isKeyHotkey(pushToTalk, evt)) {
         evt.preventDefault();
+        evt.stopPropagation();
         if (prevMicRef.current === null) {
-          prevMicRef.current = ce.control.microphone;
-          if (!ce.control.microphone) {
-            ce.control.toggleMicrophone();
+          prevMicRef.current = callEmbed.control.microphone;
+          if (!callEmbed.control.microphone) {
+            callEmbed.control.toggleMicrophone();
           }
         }
       }
     };
 
     const handleKeyUp = (evt: KeyboardEvent) => {
-      const ce = callEmbedRef.current;
-      const pt = pushToTalkRef.current;
-      if (!ce || !pt) return;
-      if (isKeyHotkey(pt, evt)) {
+      if (!callEmbed || !pushToTalk) return;
+      if (isKeyHotkey(pushToTalk, evt)) {
+        evt.stopPropagation();
         if (prevMicRef.current !== null) {
           const wasMuted = !prevMicRef.current;
           prevMicRef.current = null;
           if (wasMuted) {
-            ce.control.toggleMicrophone();
+            callEmbed.control.toggleMicrophone();
           }
         }
       }
@@ -130,11 +239,41 @@ function GlobalKeybindsListener() {
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
+    // Element Call runs in its own browsing context, so keys pressed while the
+    // call iframe has focus never reach the parent window. The iframe is
+    // same-origin; listeners on its window are lost on navigation, so re-attach
+    // on every load. Capture phase + stopPropagation keeps Element Call's own
+    // shortcuts (m, space) from double-toggling when bound to the same key.
+    const iframe = callEmbed?.iframe;
+    let iframeWindow: Window | null = null;
+    const detachIframe = () => {
+      iframeWindow?.removeEventListener('keydown', handleKeyDown, true);
+      iframeWindow?.removeEventListener('keyup', handleKeyUp, true);
+      iframeWindow = null;
+    };
+    const attachIframe = () => {
+      detachIframe();
+      try {
+        const win = iframe?.contentWindow;
+        if (!win) return;
+        win.addEventListener('keydown', handleKeyDown, true);
+        win.addEventListener('keyup', handleKeyUp, true);
+        iframeWindow = win;
+      } catch {
+        // cross-origin iframe: nothing we can listen to
+      }
+    };
+    attachIframe();
+    iframe?.addEventListener('load', attachIframe);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      iframe?.removeEventListener('load', attachIframe);
+      detachIframe();
     };
-  }, []); // Mount once — never re-register
+  }, [callEmbed, toggleMute, toggleDeafen, pushToTalk, toggleNoiseSuppression, setNoiseSuppression]);
 
   return null;
 }
@@ -466,9 +605,12 @@ export function CallEmbedProvider({ children }: CallEmbedProviderProps) {
   return (
     <CallEmbedContextProvider value={callEmbed}>
       {callEmbed && <CallUtils embed={callEmbed} />}
+      {callEmbed && <CallToggleSounds embed={callEmbed} />}
+      {callEmbed && <ScreenShareEndedSound embed={callEmbed} />}
       <CallEmbedRefContextProvider value={callEmbedRef}>
         <IncomingCallListener callEmbed={callEmbed} joined={joined} />
         <GlobalKeybindsListener />
+        <NoiseSuppressionSync />
         {children}
       </CallEmbedRefContextProvider>
       <div

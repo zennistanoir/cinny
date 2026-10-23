@@ -1,37 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Icon, Icons, Text } from 'folds';
+import { Box, Icon, IconButton, Icons, Text, Tooltip, TooltipProvider } from 'folds';
 import { useCallEmbed, useCallJoined } from '../../hooks/useCallEmbed';
+import { getCallRtt } from '../../plugins/call/callStats';
 import * as css from './VoicePanel.css';
 
-function pingColor(ping: number): string {
-  if (ping < 100) return '#0ebd7e';
-  if (ping <= 250) return '#ff9f1a';
-  return '#ff4d4d';
+const PING_POLL_MS = 2000;
+
+function pingColor(ping: number | null): string {
+  if (ping === null || ping < 100) return '#23A55A';
+  if (ping <= 250) return '#F0B232';
+  return '#F23F43';
 }
 
-function getSignalBars(pingMs: number | null) {
-  if (pingMs === null || pingMs < 100) return { bars: 3, color: '#23a55a' };
-  if (pingMs < 250) return { bars: 2, color: '#f0b232' };
-  return { bars: 1, color: '#f23f43' };
-}
-
-function SignalQualityMeter({ ping }: { ping: number | null }) {
-  const { bars, color } = getSignalBars(ping);
-  const heights = [4, 8, 12];
-
+function SignalTowerIcon() {
   return (
-    <div className={css.SignalMeter}>
-      {heights.map((h, i) => (
-        <div
-          key={i}
-          className={css.SignalBar}
-          style={{
-            height: `${h}px`,
-            backgroundColor: i < bars ? color : 'rgba(255,255,255,0.15)',
-          }}
-        />
-      ))}
-    </div>
+    <svg
+      className={css.TowerIcon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M8 1.5 3.5 14.5M8 1.5l4.5 13M6.4 6h3.2M5.3 9.5h5.4M4.3 12.5h7.4" />
+    </svg>
   );
 }
 
@@ -41,102 +35,69 @@ export function VoicePanel() {
   const [ping, setPing] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!callEmbed?.joined || !callEmbed.iframe) return;
+    setPing(null);
+    if (!callEmbed || !joined) return undefined;
 
-    const pollRtt = () => {
-      try {
-        const win = callEmbed.iframe.contentWindow;
-        if (!win) return;
-
-        const script = `
-          (function() {
-            try {
-              var pcs = window.__zennithPCs || [];
-              if (!pcs.length) return;
-              var best = null;
-              pcs.forEach(function(pc) {
-                if (typeof pc.getStats !== 'function') return;
-                pc.getStats(null).then(function(stats) {
-                  stats.forEach(function(report) {
-                    if (
-                      report.type === 'candidate-pair' &&
-                      report.state === 'succeeded' &&
-                      report.currentRoundTripTime !== undefined
-                    ) {
-                      var rtt = report.currentRoundTripTime * 1000;
-                      if (best === null || rtt < best) best = rtt;
-                    } else if (
-                      report.type === 'remote-inbound-rtp' &&
-                      report.roundTripTime !== undefined
-                    ) {
-                      var rtt2 = report.roundTripTime * 1000;
-                      if (best === null || rtt2 < best) best = rtt2;
-                    }
-                  });
-                  if (best !== null) window.__zennithRtt = best;
-                }).catch(function() {});
-              });
-            } catch(e) {}
-          })()
-        `;
-        (win as any).eval(script);
-        setTimeout(() => {
-          const rtt = (win as any).__zennithRtt;
-          if (typeof rtt === 'number' && rtt > 0 && rtt < 5000) {
-            setPing(Math.round(rtt));
-          }
-        }, 600);
-      } catch {
-        // iframe cross-origin may block access
-      }
+    let active = true;
+    const poll = async () => {
+      const rtt = await getCallRtt();
+      if (active && rtt !== null) setPing(rtt);
     };
-
-    pollRtt();
-    const interval = setInterval(pollRtt, 2000);
-    return () => clearInterval(interval);
+    poll();
+    const interval = setInterval(poll, PING_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [callEmbed, joined]);
 
   if (!callEmbed || !joined) return null;
 
   const roomName = callEmbed.room.name;
-  const currentPing = ping;
-  const dotColor = currentPing !== null ? pingColor(currentPing) : '#0ebd7e';
 
   return (
-    <Box className={css.VoicePanel} direction="Column" gap="200">
-      <Box alignItems="Center" gap="200">
-        <Box
-          className={css.ConnectionDot}
-          shrink="No"
-          style={{
-            backgroundColor: dotColor,
-            boxShadow: `0 0 4px ${dotColor}99`,
-          }}
-        />
-        <Box grow="Yes" direction="Column" gap="100">
-          <Text size="T300" priority="300">
-            Voice Connected
-          </Text>
-          <Text size="T300" truncate>
-            {roomName}
-          </Text>
-        </Box>
-        <Box className={css.LatencyBadge} shrink="No" style={{ color: dotColor }}>
-          <SignalQualityMeter ping={currentPing} />
-          <span>{currentPing !== null ? `${currentPing} ms` : '-- ms'}</span>
-        </Box>
+    <Box className={css.VoicePanel} alignItems="Center" gap="200">
+      <Box className={css.ConnectionDot} shrink="No" />
+      <Box grow="Yes" direction="Column">
+        <Text size="T200" priority="300" truncate>
+          Voice Connected
+        </Text>
+        <Text size="H6" truncate>
+          {roomName}
+        </Text>
       </Box>
-      <Button
-        variant="Critical"
-        fill="Solid"
-        radii="Pill"
-        size="300"
-        style={{ backgroundColor: '#DA373C', color: '#FFFFFF' }}
-        before={<Icon src={Icons.PhoneDown} size="100" filled />}
-        onClick={() => callEmbed.hangup()}
+      <Box
+        className={css.LatencyBadge}
+        shrink="No"
+        style={{ color: pingColor(ping) }}
+        title="Round-trip latency to the call server"
       >
-        <Text size="B300">Disconnect</Text>
-      </Button>
+        <SignalTowerIcon />
+        <span>{ping !== null ? `${ping} ms` : '-- ms'}</span>
+      </Box>
+      <TooltipProvider
+        position="Top"
+        tooltip={
+          <Tooltip>
+            <Text size="T200">Disconnect</Text>
+          </Tooltip>
+        }
+      >
+        {(triggerRef) => (
+          <IconButton
+            ref={triggerRef}
+            className={css.HangupButton}
+            variant="Critical"
+            fill="Soft"
+            size="300"
+            radii="300"
+            aria-label="Disconnect"
+            onClick={() => callEmbed.hangup()}
+          >
+            <Icon src={Icons.PhoneDown} size="100" filled />
+          </IconButton>
+        )}
+      </TooltipProvider>
     </Box>
   );
 }

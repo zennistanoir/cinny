@@ -47,7 +47,11 @@ function KeybindInput({
   label,
   description,
 }: {
-  settingKey: 'keybindToggleMute' | 'keybindToggleDeafen' | 'keybindPushToTalk';
+  settingKey:
+    | 'keybindToggleMute'
+    | 'keybindToggleDeafen'
+    | 'keybindPushToTalk'
+    | 'keybindToggleNoiseSuppression';
   label: string;
   description: string;
 }) {
@@ -63,12 +67,13 @@ function KeybindInput({
       setValue('');
       setCurrentValue('');
     } else {
-      const defaultVal =
-        settingKey === 'keybindToggleMute'
-          ? 'ctrl+shift+m'
-          : settingKey === 'keybindToggleDeafen'
-            ? 'ctrl+shift+d'
-            : 'ctrl+shift+space';
+      const defaults: Record<typeof settingKey, string> = {
+        keybindToggleMute: 'ctrl+shift+m',
+        keybindToggleDeafen: 'ctrl+shift+d',
+        keybindPushToTalk: 'ctrl+shift+space',
+        keybindToggleNoiseSuppression: 'ctrl+shift+x',
+      };
+      const defaultVal = defaults[settingKey];
       setValue(defaultVal);
       setCurrentValue(defaultVal);
     }
@@ -197,6 +202,11 @@ export function Keybinds({ requestClose }: KeybindsProps) {
                     settingKey="keybindPushToTalk"
                     label="Push to Talk"
                     description="Hold key to temporarily unmute. Release to restore previous mute state."
+                  />
+                  <KeybindInput
+                    settingKey="keybindToggleNoiseSuppression"
+                    label="Toggle Noise Suppression"
+                    description="Hotkey to turn microphone noise suppression on/off. Works in and out of calls."
                   />
                 </Box>
               </Box>

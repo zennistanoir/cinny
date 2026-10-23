@@ -23,7 +23,12 @@
 }
 
 .dark-theme,
-.butter-theme {
+.butter-theme,
+.violet-theme,
+.midnight-theme,
+.emerald-theme,
+.rose-theme,
+.amoled-theme {
   --tc-link: hsl(213deg 100% 80%);
 
   --mx-uc-1: hsl(208, 100%, 75%);

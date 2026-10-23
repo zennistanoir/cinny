@@ -4,9 +4,10 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import CinnySVG from '../../../../../public/res/svg/cinny.svg';
+import LogoPNG from '../../../../../public/logo.png';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { version } from '../../../../../package.json';
 
 type AboutProps = {
   requestClose: () => void;
@@ -37,8 +38,8 @@ export function About({ requestClose }: AboutProps) {
               <Box gap="400">
                 <Box shrink="No">
                   <img
-                    style={{ width: toRem(60), height: toRem(60) }}
-                    src={CinnySVG}
+                    style={{ width: toRem(60), height: toRem(60), objectFit: 'contain' }}
+                    src={LogoPNG}
                     alt="Zennith logo"
                   />
                 </Box>
@@ -46,15 +47,15 @@ export function About({ requestClose }: AboutProps) {
                   <Box direction="Column" gap="100">
                     <Box gap="100" alignItems="End">
                       <Text size="H3">Zennith</Text>
-                      <Text size="T200">v4.12.7</Text>
+                      <Text size="T200">v{version}</Text>
                     </Box>
-                    <Text>A minimalistic, futuristic Matrix client.</Text>
+                    <Text>Zenn&apos;s Forked Cinny Client!</Text>
                   </Box>
 
                   <Box gap="200" wrap="Wrap">
                     <Button
                       as="a"
-                      href="https://github.com/cinnyapp/cinny"
+                      href="https://github.com/zennistanoir/cinny"
                       rel="noreferrer noopener"
                       target="_blank"
                       variant="Secondary"
@@ -64,19 +65,6 @@ export function About({ requestClose }: AboutProps) {
                       before={<Icon src={Icons.Code} size="100" filled />}
                     >
                       <Text size="B300">Source Code</Text>
-                    </Button>
-                    <Button
-                      as="a"
-                      href="https://cinny.in/#sponsor"
-                      rel="noreferrer noopener"
-                      target="_blank"
-                      variant="Critical"
-                      fill="Soft"
-                      size="300"
-                      radii="300"
-                      before={<Icon src={Icons.Heart} size="100" filled />}
-                    >
-                      <Text size="B300">Support</Text>
                     </Button>
                   </Box>
                 </Box>
@@ -124,6 +112,23 @@ export function About({ requestClose }: AboutProps) {
                       paddingLeft: config.space.S400,
                     }}
                   >
+                    <li>
+                      <Text size="T300">
+                        Zennith is a fork of{' '}
+                        <a href="https://cinny.in" rel="noreferrer noopener" target="_blank">
+                          Cinny
+                        </a>
+                        , licensed under{' '}
+                        <a
+                          href="https://www.gnu.org/licenses/agpl-3.0.html"
+                          rel="noreferrer noopener"
+                          target="_blank"
+                        >
+                          AGPL-3.0
+                        </a>
+                        .
+                      </Text>
+                    </li>
                     <li>
                       <Text size="T300">
                         The{' '}

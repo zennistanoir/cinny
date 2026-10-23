@@ -14,8 +14,31 @@ import buildConfig from './build.config';
 const copyFiles = {
   targets: [
     {
-      src: 'node_modules/@element-hq/element-call-embedded/dist/*',
+      src: 'node_modules/@element-hq/element-call-embedded/dist/!(index.html)',
       dest: 'public/element-call',
+    },
+    {
+      // Let the host patch getUserMedia (RNNoise) before Element Call's bundle runs.
+      // See src/app/plugins/call/noiseSuppression.ts.
+      src: 'node_modules/@element-hq/element-call-embedded/dist/index.html',
+      dest: 'public/element-call',
+      transform: (content) =>
+        content.replace(
+          '<meta charset="UTF-8">',
+          '<meta charset="UTF-8"><script>try{parent.__zennithPatchMedia&&parent.__zennithPatchMedia(window)}catch(e){}</script>'
+        ),
+    },
+    {
+      src: [
+        'node_modules/@sapphi-red/web-noise-suppressor/dist/rnnoise.wasm',
+        'node_modules/@sapphi-red/web-noise-suppressor/dist/rnnoise_simd.wasm',
+      ],
+      dest: 'public/rnnoise',
+    },
+    {
+      src: 'node_modules/@sapphi-red/web-noise-suppressor/dist/rnnoise/workletProcessor.js',
+      dest: 'public/rnnoise',
+      rename: 'rnnoiseWorklet.js',
     },
     {
       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
@@ -37,6 +60,14 @@ const copyFiles = {
     {
       src: 'public/res/android',
       dest: 'public/',
+    },
+    {
+      src: 'public/favicon.ico',
+      dest: 'public/',
+    },
+    {
+      src: 'public/res/apple',
+      dest: 'public/res/',
     },
     {
       src: 'public/locales',
@@ -81,12 +112,12 @@ export default defineConfig({
   server: {
     port: 8080,
     host: true,
-    watch: {
-      ignored: ['**/src-tauri/**'],
-    },
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
+    },
+    watch: {
+      ignored: ['**/src-tauri/**'],
     },
   },
   plugins: [

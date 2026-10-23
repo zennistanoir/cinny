@@ -1,7 +1,17 @@
 import { lightTheme } from 'folds';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { onDarkFontWeight, onLightFontWeight } from '../../config.css';
-import { butterTheme, darkTheme, silverTheme, violetTheme } from '../../colors.css';
+import {
+  amoledTheme,
+  butterTheme,
+  darkTheme,
+  emeraldTheme,
+  lavenderTheme,
+  midnightTheme,
+  roseTheme,
+  silverTheme,
+  violetTheme,
+} from '../../colors.css';
 import { settingsAtom } from '../state/settings';
 import { useSetting } from '../state/hooks/settings';
 
@@ -44,8 +54,52 @@ export const VioletTheme: Theme = {
   classNames: ['violet-theme', violetTheme, onDarkFontWeight, 'prism-dark'],
 };
 
+export const LavenderTheme: Theme = {
+  id: 'lavender-theme',
+  kind: ThemeKind.Light,
+  classNames: ['lavender-theme', lavenderTheme, onLightFontWeight, 'prism-light'],
+};
+
+export const MidnightTheme: Theme = {
+  id: 'midnight-theme',
+  kind: ThemeKind.Dark,
+  classNames: ['midnight-theme', midnightTheme, onDarkFontWeight, 'prism-dark'],
+};
+
+export const EmeraldTheme: Theme = {
+  id: 'emerald-theme',
+  kind: ThemeKind.Dark,
+  classNames: ['emerald-theme', emeraldTheme, onDarkFontWeight, 'prism-dark'],
+};
+
+export const RoseTheme: Theme = {
+  id: 'rose-theme',
+  kind: ThemeKind.Dark,
+  classNames: ['rose-theme', roseTheme, onDarkFontWeight, 'prism-dark'],
+};
+
+export const AmoledTheme: Theme = {
+  id: 'amoled-theme',
+  kind: ThemeKind.Dark,
+  classNames: ['amoled-theme', amoledTheme, onDarkFontWeight, 'prism-dark'],
+};
+
 export const useThemes = (): Theme[] => {
-  const themes: Theme[] = useMemo(() => [LightTheme, SilverTheme, DarkTheme, ButterTheme, VioletTheme], []);
+  const themes: Theme[] = useMemo(
+    () => [
+      LightTheme,
+      SilverTheme,
+      LavenderTheme,
+      DarkTheme,
+      ButterTheme,
+      VioletTheme,
+      MidnightTheme,
+      EmeraldTheme,
+      RoseTheme,
+      AmoledTheme,
+    ],
+    []
+  );
 
   return themes;
 };
@@ -57,7 +111,12 @@ export const useThemeNames = (): Record<string, string> =>
       [SilverTheme.id]: 'Silver',
       [DarkTheme.id]: 'Dark',
       [ButterTheme.id]: 'Butter',
-      [VioletTheme.id]: 'Zennith Violet',
+      [VioletTheme.id]: 'Violet',
+      [LavenderTheme.id]: 'Lavender',
+      [MidnightTheme.id]: 'Midnight',
+      [EmeraldTheme.id]: 'Emerald',
+      [RoseTheme.id]: 'Rose',
+      [AmoledTheme.id]: 'Black',
     }),
     []
   );

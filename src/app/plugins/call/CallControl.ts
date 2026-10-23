@@ -3,6 +3,9 @@ import EventEmitter from 'events';
 import { CallControlState } from './CallControlState';
 import { ElementMediaStateDetail, ElementMediaStatePayload, ElementWidgetActions } from './types';
 
+// Set on the call iframe's <html> while a stream is maximized.
+const MAXIMIZED_ATTR = 'data-zennith-maximized';
+
 export enum CallControlEvent {
   StateUpdate = 'state_update',
 }
@@ -67,6 +70,22 @@ export class CallControl extends EventEmitter implements CallControlState {
     return spotlightButton ?? undefined;
   }
 
+  /**
+   * Element Call's own expand/collapse toggle on the spotlight tile. It shares the
+   * `expand` class with the screen share volume trigger and EC's own "maximise"
+   * (fullscreen) button, and only exists in spotlight view, where it is always
+   * the last button in the tile's bottom-right row.
+   */
+  private get spotlightExpandButton(): HTMLButtonElement | undefined {
+    const row = this.document?.querySelector('[class*="_bottomRightButtons_"]');
+    const last = row?.querySelector<HTMLButtonElement>(':scope > button:last-child');
+    if (!last) return undefined;
+    if (last.getAttribute('aria-label') === 'maximise' || last.hasAttribute('aria-haspopup')) {
+      return undefined;
+    }
+    return last;
+  }
+
   private get gridButton(): HTMLInputElement | undefined {
     const gridButton = this.document?.querySelector(
       'input[value="grid"]'
@@ -122,46 +141,11 @@ export class CallControl extends EventEmitter implements CallControlState {
   public startObserving() {
     if (!this.document) return;
 
-    // Monkey-patch RTCPeerConnection in the iframe to capture
-    // all instances so Zennith can poll getStats() for live RTT.
-    this.injectPCPatch();
-
     this.bodyMutationObserver.observe(this.document.body, {
       childList: true,
       subtree: false, // only direct children of body
     });
     this.onBodyMutation();
-  }
-
-  /** Inject a script that wraps RTCPeerConnection to store all instances. */
-  private injectPCPatch() {
-    if (!this.document) return;
-    const patchId = 'zennith-pc-patch';
-    if (this.document.getElementById(patchId)) return;
-
-    const script = this.document.createElement('script');
-    script.id = patchId;
-    script.textContent = `
-      (function() {
-        if (window.__zennithPCs) return;
-        window.__zennithPCs = [];
-        var OrigPC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
-        if (!OrigPC) return;
-        window.RTCPeerConnection = function() {
-          var pc = new OrigPC(arguments[0], arguments[1]);
-          try { window.__zennithPCs.push(pc); } catch(e) {}
-          pc.addEventListener('connectionstatechange', function() {
-            if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
-              var idx = window.__zennithPCs.indexOf(pc);
-              if (idx > -1) window.__zennithPCs.splice(idx, 1);
-            }
-          });
-          return pc;
-        };
-        window.RTCPeerConnection.prototype = OrigPC.prototype;
-      })();
-    `;
-    this.document.head.appendChild(script);
   }
   
   private onBodyMutation() {
@@ -223,6 +207,29 @@ export class CallControl extends EventEmitter implements CallControlState {
       '  height: 100% !important;',
       '  object-fit: cover !important;',
       '  border-radius: 50% !important;',
+      '}',
+      // Maximized stream (see maximizeStream): only the spotlight tile stays.
+      // Other tiles are hidden with visibility, not display, so Element Call's
+      // layout measurement keeps working underneath.
+      `html[${MAXIMIZED_ATTR}] [class*="_grid_"] > [class*="_tile_"]:not(:has([class*="_bottomRightButtons_"])){`,
+      '  visibility: hidden !important;',
+      '  pointer-events: none !important;',
+      '}',
+      `html[${MAXIMIZED_ATTR}] [class*="_nameTag_"],`,
+      `html[${MAXIMIZED_ATTR}] [class*="_indicators_"],`,
+      `html[${MAXIMIZED_ATTR}] [class*="_advance_"],`,
+      `html[${MAXIMIZED_ATTR}] [class*="_bottomRightButtons_"] > button[aria-label="maximise"],`,
+      `html[${MAXIMIZED_ATTR}] [class*="_bottomRightButtons_"] > button:last-child:not([aria-haspopup]){`,
+      '  display: none !important;',
+      '}',
+      `html[${MAXIMIZED_ATTR}], html[${MAXIMIZED_ATTR}] body{`,
+      '  background: #000 !important;',
+      '}',
+      `html[${MAXIMIZED_ATTR}] [class*="_tile_"]:has([class*="_bottomRightButtons_"]),`,
+      `html[${MAXIMIZED_ATTR}] [class*="_tile_"]:has([class*="_bottomRightButtons_"]) [class*="_contents_"]{`,
+      '  border-radius: 0 !important;',
+      '  box-shadow: none !important;',
+      '  outline: none !important;',
       '}',
     ].join('\n');
     this.document.head.appendChild(style);
@@ -412,7 +419,75 @@ export class CallControl extends EventEmitter implements CallControlState {
     }
   }
 
+  private maximizeCloseHandler: (() => void) | undefined;
+
+  private async waitFor<T>(get: () => T | undefined, timeoutMs = 1500): Promise<T | undefined> {
+    const start = Date.now();
+    let value = get();
+    while (value === undefined && Date.now() - start < timeoutMs) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      value = get();
+    }
+    return value;
+  }
+
+  /**
+   * Show the spotlight (screen share) tile as large as possible: switch to
+   * spotlight view (the expand toggle only exists there), expand the tile inside
+   * Element Call, put the call iframe into browser fullscreen and hide every
+   * other tile and overlay. Leaving fullscreen (Esc) restores the previous view.
+   */
+  public async maximizeStream() {
+    if (this.maximizeCloseHandler) return;
+
+    const wasGrid = !this.spotlight;
+    if (wasGrid) this.spotlightButton?.click();
+
+    const expandBtn = await this.waitFor(() => this.spotlightExpandButton);
+    const wasExpanded = expandBtn?.getAttribute('aria-label') === 'Collapse';
+    if (expandBtn && !wasExpanded) expandBtn.click();
+
+    const root = this.document?.documentElement;
+
+    const restore = () => {
+      root?.removeAttribute(MAXIMIZED_ATTR);
+      if (!wasExpanded) {
+        const btn = this.spotlightExpandButton;
+        if (btn && btn.getAttribute('aria-label') === 'Collapse') btn.click();
+      }
+      if (wasGrid && this.spotlight) this.gridButton?.click();
+    };
+
+    const onFullscreenChange = () => {
+      if (document.fullscreenElement === this.iframe) return;
+      this.maximizeCloseHandler?.();
+    };
+    this.maximizeCloseHandler = () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      this.maximizeCloseHandler = undefined;
+      restore();
+    };
+
+    try {
+      await this.iframe.requestFullscreen();
+      root?.setAttribute(MAXIMIZED_ATTR, '');
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+    } catch {
+      // Fullscreen refused (no user gesture / unsupported webview): keep the
+      // in-call expand only, with EC's own buttons left visible so the user can
+      // collapse it again.
+      this.maximizeCloseHandler = undefined;
+    }
+  }
+
   public dispose() {
+    this.maximizeCloseHandler?.();
+    if (document.fullscreenElement === this.iframe) {
+      document.exitFullscreen().catch(() => undefined);
+    }
     this.reactionsCloseHandler?.();
     this.settingsCloseHandler?.();
     this.bodyMutationObserver.disconnect();

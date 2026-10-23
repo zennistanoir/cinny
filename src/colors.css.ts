@@ -1,7 +1,7 @@
 import { createTheme } from '@vanilla-extract/css';
 import { color } from 'folds';
 
-export const silverTheme = createTheme(color, {
+const silverThemeData = {
   Background: {
     Container: '#DEDEDE',
     ContainerHover: '#D3D3D3',
@@ -96,7 +96,9 @@ export const silverTheme = createTheme(color, {
     Shadow: 'rgba(0 0 0 / 20%)',
     Overlay: 'rgba(0 0 0 / 50%)',
   },
-});
+};
+
+export const silverTheme = createTheme(color, silverThemeData);
 
 const darkThemeData = {
   Background: {
@@ -334,4 +336,136 @@ export const butterTheme = createTheme(color, {
     ContainerLine: '#666459',
     OnContainer: '#F2EED3',
   },
+});
+
+type Ramp = [string, string, string, string, string, string];
+
+// Dark neutrals: each layer sits one step above the previous, like dark/butter.
+const darkSurfaces = (r: Ramp, on: string) => ({
+  Background: {
+    Container: r[0],
+    ContainerHover: r[1],
+    ContainerActive: r[2],
+    ContainerLine: r[3],
+    OnContainer: on,
+  },
+  Surface: {
+    Container: r[1],
+    ContainerHover: r[2],
+    ContainerActive: r[3],
+    ContainerLine: r[4],
+    OnContainer: on,
+  },
+  SurfaceVariant: {
+    Container: r[2],
+    ContainerHover: r[3],
+    ContainerActive: r[4],
+    ContainerLine: r[5],
+    OnContainer: on,
+  },
+  Secondary: {
+    ...darkThemeData.Secondary,
+    Container: r[3],
+    ContainerHover: r[4],
+    ContainerActive: r[5],
+    OnContainer: on,
+  },
+});
+
+export const midnightTheme = createTheme(color, {
+  ...darkThemeData,
+  ...darkSurfaces(['#0F1624', '#172033', '#1F2A42', '#283551', '#314060', '#3A4B6F'], '#E6ECF7'),
+  Primary: {
+    Main: '#8AB4F8',
+    MainHover: '#7AA8F6',
+    MainActive: '#6E9FF5',
+    MainLine: '#6296F3',
+    OnMain: '#0B1E3D',
+    Container: '#1E3A66',
+    ContainerHover: '#224272',
+    ContainerActive: '#264A7E',
+    ContainerLine: '#2A528A',
+    OnContainer: '#D6E4FC',
+  },
+  Other: { ...darkThemeData.Other, FocusRing: 'rgba(138, 180, 248, 0.5)' },
+});
+
+export const emeraldTheme = createTheme(color, {
+  ...darkThemeData,
+  ...darkSurfaces(['#0E1714', '#15211D', '#1C2B26', '#24362F', '#2C4139', '#344C43'], '#E3F2EC'),
+  Primary: {
+    Main: '#6EE7B7',
+    MainHover: '#5EE0AD',
+    MainActive: '#4FDAA3',
+    MainLine: '#40D399',
+    OnMain: '#053324',
+    Container: '#0F4A35',
+    ContainerHover: '#12553D',
+    ContainerActive: '#156045',
+    ContainerLine: '#186B4D',
+    OnContainer: '#C9F5E3',
+  },
+  Other: { ...darkThemeData.Other, FocusRing: 'rgba(110, 231, 183, 0.5)' },
+});
+
+export const roseTheme = createTheme(color, {
+  ...darkThemeData,
+  ...darkSurfaces(['#1A1215', '#261A1F', '#332329', '#402C33', '#4D353D', '#5A3E47'], '#F7E6EC'),
+  Primary: {
+    Main: '#F4A6C0',
+    MainHover: '#F296B5',
+    MainActive: '#F087AA',
+    MainLine: '#EE779F',
+    OnMain: '#45152A',
+    Container: '#6B2540',
+    ContainerHover: '#772A48',
+    ContainerActive: '#832F50',
+    ContainerLine: '#8F3458',
+    OnContainer: '#FBD9E5',
+  },
+  Other: { ...darkThemeData.Other, FocusRing: 'rgba(244, 166, 192, 0.5)' },
+});
+
+// Pure black for OLED screens, with the Zennith violet accent.
+export const amoledTheme = createTheme(color, {
+  ...violetThemeData,
+  ...darkSurfaces(['#000000', '#0D0D0D', '#1A1A1A', '#262626', '#333333', '#404040'], '#F2F2F2'),
+});
+
+export const lavenderTheme = createTheme(color, {
+  ...silverThemeData,
+  Background: {
+    Container: '#E9E4F5',
+    ContainerHover: '#DFD8F0',
+    ContainerActive: '#D4CCEA',
+    ContainerLine: '#C9C0E4',
+    OnContainer: '#1C1530',
+  },
+  Surface: {
+    Container: '#F6F3FC',
+    ContainerHover: '#E9E4F5',
+    ContainerActive: '#DFD8F0',
+    ContainerLine: '#D4CCEA',
+    OnContainer: '#1C1530',
+  },
+  SurfaceVariant: {
+    Container: '#E9E4F5',
+    ContainerHover: '#DFD8F0',
+    ContainerActive: '#D4CCEA',
+    ContainerLine: '#C9C0E4',
+    OnContainer: '#1C1530',
+  },
+  Primary: {
+    Main: '#6D28D9',
+    MainHover: '#6324C6',
+    MainActive: '#5B21B6',
+    MainLine: '#531EA6',
+    OnMain: '#FFFFFF',
+    Container: '#DDD0F7',
+    ContainerHover: '#D2C2F4',
+    ContainerActive: '#C7B4F1',
+    ContainerLine: '#BCA6EE',
+    OnContainer: '#3B1475',
+  },
+  Other: { ...silverThemeData.Other, FocusRing: 'rgba(109, 40, 217, 0.5)' },
 });
