@@ -151,6 +151,60 @@ const sharePublish = () => {
   };
 };
 
+// The LiveKit LocalParticipant that last started a share, so quality and content
+// changes can be applied to a share that is already live.
+type ShareTrack = {
+  mediaStreamTrack?: MediaStreamTrack;
+  sender?: RTCRtpSender;
+  encodings?: RTCRtpEncodingParameters[];
+};
+type ShareOwner = {
+  getTrackPublication(source: string): { track?: ShareTrack } | undefined;
+};
+let shareOwner: ShareOwner | undefined;
+
+// Re-applies quality and content to the live screen share. The codec (H.264) is fixed
+// once the track is published, so that one only takes effect on the next share.
+export const applyShareSettingsLive = async (): Promise<void> => {
+  const track = shareOwner?.getTrackPublication('screen_share')?.track;
+  const mst = track?.mediaStreamTrack;
+  if (!track || !mst || mst.readyState === 'ended') return;
+
+  const { width, height, frameRate, maxBitrate } = sharePreset();
+  const motion = shareContent() === 'motion';
+  mst.contentHint = shareContent();
+  await mst
+    .applyConstraints({ width: { ideal: width }, height: { ideal: height }, frameRate })
+    .catch((err) => console.warn('[zennith] Could not resize screen share', err));
+
+  const { sender } = track;
+  if (!sender) return;
+  const params = sender.getParameters();
+  const { encodings } = params;
+  if (!encodings?.length) return;
+  // Simulcast sends several layers; the full-resolution one carries the preset.
+  let top = 0;
+  encodings.forEach((enc, i) => {
+    if ((enc.scaleResolutionDownBy ?? 1) < (encodings[top].scaleResolutionDownBy ?? 1)) top = i;
+  });
+  encodings[top].maxBitrate = maxBitrate;
+  encodings[top].maxFramerate = frameRate;
+  (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
+    motion ? 'maintain-framerate' : 'maintain-resolution';
+  try {
+    await sender.setParameters(params);
+  } catch (err) {
+    console.warn('[zennith] Could not update screen share encoding', err);
+    return;
+  }
+  // LiveKit re-applies its own copy of the encodings when the track restarts.
+  const own = track.encodings?.[top];
+  if (own && track.encodings?.length === encodings.length) {
+    own.maxBitrate = maxBitrate;
+    own.maxFramerate = frameRate;
+  }
+};
+
 // --- Bridge ----------------------------------------------------------------------------
 
 type BridgeWindow = Window & { __zennithEC?: unknown };
@@ -197,9 +251,13 @@ export const installElementCallBridge = (win: BridgeWindow) => {
     },
     shareCapture,
     sharePublish,
+    shareOwner: (owner: ShareOwner | undefined) => {
+      shareOwner = owner;
+    },
   };
   // Leaving or reloading the call tears the iframe down without ending its scopes.
   win.addEventListener('pagehide', () => {
+    shareOwner = undefined;
     volumeWatchers.clear();
     clearPresence();
   });

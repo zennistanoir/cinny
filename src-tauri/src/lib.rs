@@ -58,6 +58,53 @@ fn set_unread_badge(window: WebviewWindow, state: String) -> tauri::Result<()> {
     }
 }
 
+// Windows' answer to "When Windows detects communications activity" (Sound control panel
+// → Communications), read by the audio service whenever a call opens the microphone:
+// 0 mutes other sounds, 1 lowers them by 80% (the default while unset), 2 by 50%,
+// 3 does nothing. `None` means unset.
+#[cfg(windows)]
+const AUDIO_KEY: &str = r"Software\Microsoft\Multimedia\Audio";
+#[cfg(windows)]
+const DUCKING_VALUE: &str = "UserDuckingPreference";
+
+#[tauri::command]
+fn get_ducking_preference() -> Option<u32> {
+    #[cfg(windows)]
+    {
+        windows_registry::CURRENT_USER
+            .open(AUDIO_KEY)
+            .and_then(|key| key.get_u32(DUCKING_VALUE))
+            .ok()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+#[tauri::command]
+fn set_ducking_preference(value: Option<u32>) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let key = windows_registry::CURRENT_USER
+            .create(AUDIO_KEY)
+            .map_err(|err| err.to_string())?;
+        match value {
+            Some(value) => key.set_u32(DUCKING_VALUE, value).map_err(|err| err.to_string()),
+            // Removing a value that is already unset fails; either way it ends up unset.
+            None => {
+                let _ = key.remove_value(DUCKING_VALUE);
+                Ok(())
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = value;
+        Ok(())
+    }
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -117,7 +164,12 @@ pub fn run() {
 
     builder
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_unread_badge])
+        .invoke_handler(tauri::generate_handler![
+            set_close_to_tray,
+            set_unread_badge,
+            get_ducking_preference,
+            set_ducking_preference
+        ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" && CLOSE_TO_TRAY.load(Ordering::Relaxed) {

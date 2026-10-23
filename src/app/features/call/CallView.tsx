@@ -1,5 +1,5 @@
 import React, { RefObject, useRef } from 'react';
-import { Badge, Box, color, Header, Scroll, Text, toRem } from 'folds';
+import { Box, color, Header, Scroll, Text, toRem } from 'folds';
 import { useCallEmbed, useCallJoined, useCallEmbedPlacementSync } from '../../hooks/useCallEmbed';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { PrescreenControls } from './PrescreenControls';
@@ -107,11 +107,6 @@ function CallPrescreen() {
               <Box grow="Yes" alignItems="Center">
                 <Text size="L400">Participant</Text>
               </Box>
-              <Badge variant="Critical" fill="Solid" size="400">
-                <Text as="span" size="L400" truncate>
-                  {callMembers.length} Live
-                </Text>
-              </Badge>
             </Header>
           )}
           <CallMemberRenderer members={callMembers} />

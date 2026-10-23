@@ -8,7 +8,11 @@ import path from 'path';
 //   - per-user playback volume is read from / saved to Zennith's store, so it survives
 //     rejoining (Element Call hardcodes 100% on every join)
 //   - speaking and screen-share state is reported for the voice member list
-//   - screen-share capture/publish options come from Zennith's quality settings
+//   - screen-share capture/publish options come from Zennith's quality settings, and the
+//     sharing participant is handed over so changes can be applied mid-stream
+//   - with no device chosen, the system default device is used instead of the first one
+//     listed. Brave shuffles the device list, so "first" could be Windows' virtual
+//     "communications" output, which makes Windows turn other apps down by 80%.
 //
 // The match strings depend on Element Call's minified names and break on upgrade; every
 // miss is reported loudly and the bundle is left otherwise intact.
@@ -51,7 +55,13 @@ const PATCHES = [
     name: 'screen-share quality',
     find: 'j.value?.setScreenShareEnabled(t,e).catch(u.error)',
     replace:
-      'j.value?.setScreenShareEnabled(t,{...e,...window.__zennithEC?.shareCapture?.()},window.__zennithEC?.sharePublish?.()).catch(u.error)',
+      '(window.__zennithEC?.shareOwner?.(j.value),j.value)?.setScreenShareEnabled(t,{...e,...window.__zennithEC?.shareCapture?.()},window.__zennithEC?.sharePublish?.()).catch(u.error)',
+  },
+  {
+    name: 'devices: default to the system default',
+    find: 'function k1(e,t){return IJ([e,t],(e,t)=>{if(e.size)return t!==void 0&&e.has(t)||e.size===1&&e.has(``)?t:e.keys().next().value})}',
+    replace:
+      'function k1(e,t){return IJ([e,t],(e,t)=>{if(e.size)return t!==void 0&&e.has(t)||e.size===1&&e.has(``)?t:e.has(`default`)?`default`:[...e.keys()].find(k=>k!==`communications`)??e.keys().next().value})}',
   },
 ];
 
@@ -93,7 +103,7 @@ export const patchElementCall = (outDir) => ({
       console.warn(
         `\n[zennith] WARNING: ${missed.length} Element Call patch(es) did not apply (Element Call upgraded?):\n  - ${missed.join(
           '\n  - '
-        )}\nPersistent volume / speaking ring / LIVE badge / share quality may not work.\n`
+        )}\nPersistent volume / speaking ring / LIVE badge / share quality / default device may not work.\n`
       );
     } else {
       console.log(`[zennith] Patched Element Call bundle (${PATCHES.length} patches).`);

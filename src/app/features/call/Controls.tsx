@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { MouseEventHandler } from 'react';
 import { Icon, IconButton, Icons, Line, Text, Tooltip, TooltipProvider } from 'folds';
 import { useAtom } from 'jotai';
 import * as css from './styles.css';
@@ -125,16 +125,18 @@ export function VideoButton({ enabled, onToggle }: VideoButtonProps) {
 
 type ScreenShareButtonProps = {
   enabled: boolean;
-  onToggle: () => void;
+  /** Opens the screen-share panel (ScreenSharePopOut), anchored to the button. */
+  onClick: MouseEventHandler<HTMLButtonElement>;
+  open?: boolean;
 };
-export function ScreenShareButton({ enabled, onToggle }: ScreenShareButtonProps) {
+export function ScreenShareButton({ enabled, onClick, open }: ScreenShareButtonProps) {
   return (
     <TooltipProvider
       position="Top"
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Stop Screenshare' : 'Start Screenshare'}</Text>
+          <Text size="T200">{enabled ? 'Stream Settings' : 'Share Screen'}</Text>
         </Tooltip>
       }
     >
@@ -145,8 +147,9 @@ export function ScreenShareButton({ enabled, onToggle }: ScreenShareButtonProps)
           fill="Soft"
           radii="400"
           size="400"
-          onClick={() => onToggle()}
+          onClick={onClick}
           outlined
+          aria-pressed={open}
         >
           <Icon size="400" src={Icons.ScreenShare} filled={enabled} />
         </IconButton>

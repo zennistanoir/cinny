@@ -660,22 +660,6 @@ export function RoomNavItem({
             />
             <span className="channel-name">{roomName}</span>
           </div>
-          {callMembers.length > 0 && (
-            <span
-              style={{
-                backgroundColor: '#f23f43',
-                color: '#fff',
-                borderRadius: '8px',
-                padding: '0 6px',
-                fontSize: '12px',
-                fontWeight: 600,
-                lineHeight: '18px',
-                flexShrink: 0,
-              }}
-            >
-              {callMembers.length} Live
-            </span>
-          )}
         </NavLink>
 
         {/* 2. Connected Users Tree — STRICTLY OUTSIDE AND BELOW THE HEADER */}

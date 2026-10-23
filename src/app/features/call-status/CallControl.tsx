@@ -1,10 +1,22 @@
-import { Box, Chip, Icon, IconButton, Icons, Spinner, Text, Tooltip, TooltipProvider } from 'folds';
-import React, { useCallback } from 'react';
+import {
+  Box,
+  Chip,
+  Icon,
+  IconButton,
+  Icons,
+  RectCords,
+  Spinner,
+  Text,
+  Tooltip,
+  TooltipProvider,
+} from 'folds';
+import React, { MouseEventHandler, useCallback, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { StatusDivider } from './components';
 import { CallEmbed, useCallControlState } from '../../plugins/call';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { callEmbedAtom } from '../../state/callEmbed';
+import { ScreenSharePopOut } from '../call/ScreenSharePanel';
 
 type MicrophoneButtonProps = {
   enabled: boolean;
@@ -121,16 +133,17 @@ function VideoButton({ enabled, onToggle, disabled }: VideoButtonProps) {
 
 type ScreenShareButtonProps = {
   enabled: boolean;
-  onToggle: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
+  open?: boolean;
   disabled?: boolean;
 };
-function ScreenShareButton({ enabled, onToggle, disabled }: ScreenShareButtonProps) {
+function ScreenShareButton({ enabled, onClick, open, disabled }: ScreenShareButtonProps) {
   return (
     <TooltipProvider
       position="Top"
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Stop Screenshare' : 'Start Screenshare'}</Text>
+          <Text size="T200">{enabled ? 'Stream Settings' : 'Share Screen'}</Text>
         </Tooltip>
       }
     >
@@ -141,8 +154,9 @@ function ScreenShareButton({ enabled, onToggle, disabled }: ScreenShareButtonPro
           fill="Soft"
           radii="300"
           size="300"
-          onClick={onToggle}
+          onClick={onClick}
           outlined
+          aria-pressed={open}
           disabled={disabled}
         >
           <Icon size="100" src={Icons.ScreenShare} filled={enabled} />
@@ -163,6 +177,7 @@ export function CallControl({
 }) {
   const { microphone, video, sound, screenshare } = useCallControlState(callEmbed.control);
   const setCallEmbed = useSetAtom(callEmbedAtom);
+  const [shareCords, setShareCords] = useState<RectCords>();
 
   const handleMicrophoneToggle = useCallback(() => callEmbed.control.toggleMicrophone(), [callEmbed]);
   const handleVideoToggle = useCallback(() => callEmbed.control.toggleVideo(), [callEmbed]);
@@ -203,10 +218,18 @@ export function CallControl({
         {!compact && (
           <ScreenShareButton
             enabled={screenshare}
-            onToggle={() => callEmbed.control.toggleScreenshare()}
+            open={!!shareCords}
+            onClick={(evt) => setShareCords(evt.currentTarget.getBoundingClientRect())}
             disabled={!callJoined}
           />
         )}
+        <ScreenSharePopOut
+          anchor={callJoined && !compact ? shareCords : undefined}
+          sharing={screenshare}
+          onToggle={() => callEmbed.control.toggleScreenshare()}
+          onClose={() => setShareCords(undefined)}
+          align="Start"
+        />
       </Box>
       <StatusDivider />
       <Chip

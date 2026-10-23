@@ -245,6 +245,58 @@ export function DesktopHotkeysSetting() {
   );
 }
 
+// Windows turns other apps down while a call has the microphone open. That's a per-user
+// Windows setting (Sound → Communications), so this switch changes it for every app.
+const NO_DUCKING = 3;
+const PREV_DUCKING_KEY = 'zennith-prev-ducking';
+
+export function DesktopCallDuckingSetting() {
+  const [ducking, setDucking] = useState<boolean>();
+
+  useEffect(() => {
+    invoke<number | null>('get_ducking_preference')
+      .then((value) => setDucking(value !== NO_DUCKING))
+      .catch(() => setDucking(true));
+  }, []);
+
+  const handleChange = async (value: boolean) => {
+    const prev = ducking;
+    setDucking(value);
+    try {
+      if (value) {
+        // Restore what Windows had before it was switched off here; unset is its default.
+        const saved = JSON.parse(localStorage.getItem(PREV_DUCKING_KEY) ?? 'null');
+        await invoke('set_ducking_preference', {
+          value: typeof saved === 'number' && saved !== NO_DUCKING ? saved : null,
+        });
+        localStorage.removeItem(PREV_DUCKING_KEY);
+      } else {
+        const current = await invoke<number | null>('get_ducking_preference');
+        localStorage.setItem(PREV_DUCKING_KEY, JSON.stringify(current));
+        await invoke('set_ducking_preference', { value: NO_DUCKING });
+      }
+    } catch (err) {
+      console.warn('[zennith] Could not change Windows call ducking', err);
+      setDucking(prev);
+    }
+  };
+
+  return (
+    <SettingTile
+      title="Lower Other Apps During Calls"
+      description="Windows turns down music and games while you're in a call. Switch this off to keep them at full volume. This is Windows' own Communications setting, so it applies to other calling apps too."
+      after={
+        <Switch
+          variant="Primary"
+          value={ducking ?? true}
+          disabled={ducking === undefined}
+          onChange={handleChange}
+        />
+      }
+    />
+  );
+}
+
 function StartOnLogin() {
   const [enabled, setEnabled] = useState<boolean>();
 

@@ -23,6 +23,7 @@ import {
   SoundButton,
   VideoButton,
 } from './Controls';
+import { ScreenSharePopOut } from './ScreenSharePanel';
 import { CallEmbed, useCallControlState } from '../../plugins/call';
 import { stopPropagation } from '../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -40,6 +41,7 @@ export function CallControls({ callEmbed }: CallControlsProps) {
   );
 
   const [cords, setCords] = useState<RectCords>();
+  const [shareCords, setShareCords] = useState<RectCords>();
   const [noiseSuppression, setNoiseSuppression] = useSetting(settingsAtom, 'noiseSuppression');
   const [visible, setVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -128,7 +130,14 @@ export function CallControls({ callEmbed }: CallControlsProps) {
         <VideoButton enabled={video} onToggle={handleVideoToggle} />
         <ScreenShareButton
           enabled={screenshare}
+          open={!!shareCords}
+          onClick={(evt) => setShareCords(evt.currentTarget.getBoundingClientRect())}
+        />
+        <ScreenSharePopOut
+          anchor={shareCords}
+          sharing={screenshare}
           onToggle={() => callEmbed.control.toggleScreenshare()}
+          onClose={() => setShareCords(undefined)}
         />
         <ChatButton />
         <Button

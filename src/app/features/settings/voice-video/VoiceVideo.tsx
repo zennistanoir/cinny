@@ -19,13 +19,10 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
-import {
-  ScreenShareContent,
-  ScreenShareQuality,
-  settingsAtom,
-  VoiceGateLevel,
-} from '../../../state/settings';
+import { settingsAtom, VoiceGateLevel } from '../../../state/settings';
 import { stopPropagation } from '../../../utils/keyboard';
+import { DesktopCallDuckingSetting } from '../../../plugins/desktop';
+import { SHARE_CONTENT_OPTIONS, SHARE_QUALITY_OPTIONS } from '../../call/ScreenSharePanel';
 import { SequenceCardStyle } from '../styles.css';
 
 type DeviceKind = 'audioinput' | 'audiooutput' | 'videoinput';
@@ -42,7 +39,13 @@ const EC_DEVICE_KEYS: Record<DeviceKind, string> = {
 const readDevice = (kind: DeviceKind): string | undefined => {
   try {
     const value = localStorage.getItem(EC_DEVICE_KEYS[kind]);
-    return value === null ? undefined : JSON.parse(value) ?? undefined;
+    const id = value === null ? undefined : JSON.parse(value) ?? undefined;
+    // An old "communications" choice would keep ducking other apps; fall back to Default.
+    if (id === 'communications') {
+      localStorage.removeItem(EC_DEVICE_KEYS[kind]);
+      return undefined;
+    }
+    return id;
   } catch {
     return undefined;
   }
@@ -96,10 +99,12 @@ function DeviceSelect({ kind, devices }: DeviceSelectProps) {
 
   // Chrome lists the OS default as a virtual "default" device; it becomes the
   // Default entry (which clears the choice, so Element Call follows the OS).
+  // Its virtual "communications" device is hidden: playing a call through it makes
+  // Windows turn other apps down. Brave shuffles the list, so it is sorted by name.
   const systemDefault = devices.find((d) => d.kind === kind && d.deviceId === 'default');
-  const options = devices.filter(
-    (d) => d.kind === kind && d.deviceId !== '' && d.deviceId !== 'default'
-  );
+  const options = devices
+    .filter((d) => d.kind === kind && !['', 'default', 'communications'].includes(d.deviceId))
+    .sort((a, b) => a.label.localeCompare(b.label));
   const defaultName = systemDefault?.label || 'System Default';
   const current = options.find((d) => d.deviceId === selected);
   const currentName = current ? current.label || 'Unnamed device' : defaultName;
@@ -263,18 +268,6 @@ const VOICE_GATE_OPTIONS: Option<VoiceGateLevel>[] = [
   { value: 'high', label: 'High' },
 ];
 
-const SHARE_QUALITY_OPTIONS: Option<ScreenShareQuality>[] = [
-  { value: '720p30', label: '720p · 30 fps' },
-  { value: '1080p30', label: '1080p · 30 fps' },
-  { value: '1080p60', label: '1080p · 60 fps' },
-  { value: '1440p60', label: '1440p · 60 fps' },
-];
-
-const SHARE_CONTENT_OPTIONS: Option<ScreenShareContent>[] = [
-  { value: 'motion', label: 'Smooth motion' },
-  { value: 'detail', label: 'Sharp text' },
-];
-
 function Devices() {
   const [devices, refresh] = useMediaDevices();
   const needsAccess = devices.some((d) => d.kind !== 'audiooutput' && !d.label);
@@ -402,6 +395,7 @@ function Sounds() {
             <Switch variant="Primary" value={callToggleSounds} onChange={setCallToggleSounds} />
           }
         />
+        <DesktopCallDuckingSetting />
       </SequenceCard>
     </Box>
   );
