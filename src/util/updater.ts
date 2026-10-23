@@ -3,11 +3,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 
 export async function checkForZennithUpdates() {
   try {
-    const update = await check({
-      headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_GITHUB_TOKEN}`
-      }
-    });
+    const update = await check();
 
     if (update?.available) {
       console.log(`Update available: ${update.version}`);

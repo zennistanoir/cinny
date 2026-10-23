@@ -40,9 +40,9 @@
     },
     "plugins": {
       "updater": {
-        "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEyNUI2OTEyNzk0MDYyODUKUldTRllrQjVFbWxib3BBU2ZFckRYbFBkc2JPb0lhdDAyNDZ3VDhkMGZ4TVJnQm80ZEpKV0FaV3IK",
+        "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwMjc1QThCQzk1NTQ1QzUKUldURlJWWEppMW9uRUMrbGlDc1ZidDJMWVZ6aU1zTHRtV2xwZTI2MHJWZ3pBVW9WR29vNVZvZ2oK",
         "endpoints": [
-          "https://github.com/zennistanoir/cinny/releases/latest/download/latest.json"
+          "https://github.com/zennistanoir/zennith/releases/latest/download/latest.json"
         ]
       }
     }
