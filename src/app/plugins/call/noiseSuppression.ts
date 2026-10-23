@@ -1,5 +1,5 @@
 import { loadRnnoise } from '@sapphi-red/web-noise-suppressor';
-import { getSettings } from '../../state/settings';
+import { getSettings, VoiceGateLevel } from '../../state/settings';
 
 // RNNoise for Element Call.
 //
@@ -13,20 +13,37 @@ import { getSettings } from '../../state/settings';
 // a bypass path so the toggle works mid-call without renegotiating. All audio
 // objects are created from the iframe's realm: Element Call / LiveKit check
 // `instanceof MediaStreamTrack`, which fails for host-realm objects.
+//
+// An optional voice gate sits after RNNoise and silences the mic between speech
+// (keyboard clacks, fans RNNoise lets through). It is rebuilt rather than bypassed
+// when its level changes: the gate worklet stops processing for good if it ever
+// sees a disconnected input.
 
 const ASSET_BASE = `${import.meta.env.BASE_URL}public/rnnoise/`;
 // Processor name registered by rnnoiseWorklet.js (@sapphi-red/web-noise-suppressor 0.4.1).
 const PROCESSOR_ID = '@sapphi-red/web-noise-suppressor/rnnoise';
+const GATE_PROCESSOR_ID = '@sapphi-red/web-noise-suppressor/noise-gate';
 const SAMPLE_RATE = 48000;
+
+// Gate thresholds in dBFS (RMS per render quantum, measured after RNNoise).
+const GATE_LEVELS: Record<Exclude<VoiceGateLevel, 'off'>, { open: number; close: number }> = {
+  low: { open: -60, close: -66 },
+  medium: { open: -50, close: -56 },
+  high: { open: -42, close: -48 },
+};
+const GATE_HOLD_MS = 300;
 
 type Pipeline = {
   source: MediaStreamAudioSourceNode;
   node: AudioWorkletNode;
   destination: MediaStreamAudioDestinationNode;
+  makeGate: (level: VoiceGateLevel) => AudioWorkletNode | undefined;
+  gate?: AudioWorkletNode;
 };
 
 const pipelines = new Set<Pipeline>();
 let enabled = getSettings().noiseSuppression ?? true;
+let gateLevel: VoiceGateLevel = getSettings().voiceGate ?? 'off';
 let wasmBinary: Promise<ArrayBuffer> | undefined;
 
 const assetUrl = (file: string) => new URL(`${ASSET_BASE}${file}`, window.location.href).href;
@@ -47,18 +64,44 @@ const getWasmBinary = (): Promise<ArrayBuffer> => {
 const route = (p: Pipeline) => {
   p.source.disconnect();
   p.node.disconnect();
+  const tail = p.gate ?? p.destination;
   if (enabled) {
     p.source.connect(p.node);
-    p.node.connect(p.destination);
+    p.node.connect(tail);
   } else {
-    p.source.connect(p.destination);
+    p.source.connect(tail);
   }
+};
+
+const destroyGate = (p: Pipeline) => {
+  if (!p.gate) return;
+  p.gate.disconnect();
+  p.gate.port.close();
+  // eslint-disable-next-line no-param-reassign
+  p.gate = undefined;
+};
+
+const rebuildGate = (p: Pipeline) => {
+  destroyGate(p);
+  const gate = p.makeGate(gateLevel);
+  if (gate) {
+    gate.connect(p.destination);
+    // eslint-disable-next-line no-param-reassign
+    p.gate = gate;
+  }
+  route(p);
 };
 
 export const setNoiseSuppressionEnabled = (value: boolean) => {
   if (enabled === value) return;
   enabled = value;
   pipelines.forEach(route);
+};
+
+export const setVoiceGate = (level: VoiceGateLevel) => {
+  if (gateLevel === level) return;
+  gateLevel = level;
+  pipelines.forEach(rebuildGate);
 };
 
 // Make the processed track look like the captured one to Element Call / LiveKit,
@@ -80,13 +123,30 @@ const processStream = async (win: Window, stream: MediaStream): Promise<MediaStr
   const ctx = new w.AudioContext({ sampleRate: SAMPLE_RATE });
   try {
     await ctx.audioWorklet.addModule(assetUrl('rnnoiseWorklet.js'));
+    // The gate is optional: a missing worklet only disables it.
+    const gateReady = await ctx.audioWorklet
+      .addModule(assetUrl('noiseGateWorklet.js'))
+      .then(() => true)
+      .catch(() => false);
     const source = ctx.createMediaStreamSource(new w.MediaStream([src]));
     const node = new w.AudioWorkletNode(ctx, PROCESSOR_ID, {
       processorOptions: { maxChannels: 1, wasmBinary: binary },
     });
     const destination = ctx.createMediaStreamDestination();
-    const pipeline: Pipeline = { source, node, destination };
-    route(pipeline);
+    const makeGate = (level: VoiceGateLevel) => {
+      if (level === 'off' || !gateReady) return undefined;
+      const { open, close } = GATE_LEVELS[level];
+      return new w.AudioWorkletNode(ctx, GATE_PROCESSOR_ID, {
+        processorOptions: {
+          openThreshold: open,
+          closeThreshold: close,
+          holdMs: GATE_HOLD_MS,
+          maxChannels: 1,
+        },
+      });
+    };
+    const pipeline: Pipeline = { source, node, destination, makeGate };
+    rebuildGate(pipeline);
     pipelines.add(pipeline);
     if (ctx.state === 'suspended') ctx.resume().catch(() => undefined);
 
@@ -100,6 +160,7 @@ const processStream = async (win: Window, stream: MediaStream): Promise<MediaStr
       pipelines.delete(pipeline);
       src.stop();
       node.port.postMessage('destroy');
+      destroyGate(pipeline);
       source.disconnect();
       node.disconnect();
       ctx.close().catch(() => undefined);

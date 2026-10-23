@@ -60,7 +60,7 @@ import { isKeyHotkey } from 'is-hotkey';
 import { useSetSetting, useSetting } from '../state/hooks/settings';
 import { settingsAtom } from '../state/settings';
 import '../plugins/call/iframeMedia';
-import { setNoiseSuppressionEnabled } from '../plugins/call/noiseSuppression';
+import { setNoiseSuppressionEnabled, setVoiceGate } from '../plugins/call/noiseSuppression';
 import { CallControlEvent } from '../plugins/call/CallControl';
 import { playToggleSound } from '../plugins/call/toggleSounds';
 
@@ -78,6 +78,11 @@ function NoiseSuppressionSync() {
     prevRef.current = noiseSuppression;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noiseSuppression]);
+
+  const [voiceGate] = useSetting(settingsAtom, 'voiceGate');
+  useEffect(() => {
+    setVoiceGate(voiceGate);
+  }, [voiceGate]);
 
   return null;
 }

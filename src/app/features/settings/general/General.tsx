@@ -50,6 +50,7 @@ import { useMessageLayoutItems } from '../../../hooks/useMessageLayout';
 import { useMessageSpacingItems } from '../../../hooks/useMessageSpacing';
 import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle } from '../styles.css';
+import { DesktopAppSettings } from '../../../plugins/desktop';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -1006,6 +1007,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <DesktopAppSettings />
             </Box>
           </PageContent>
         </Scroll>

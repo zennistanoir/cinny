@@ -19,7 +19,12 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
+import {
+  ScreenShareContent,
+  ScreenShareQuality,
+  settingsAtom,
+  VoiceGateLevel,
+} from '../../../state/settings';
 import { stopPropagation } from '../../../utils/keyboard';
 import { SequenceCardStyle } from '../styles.css';
 
@@ -177,6 +182,99 @@ function DeviceSelect({ kind, devices }: DeviceSelectProps) {
   );
 }
 
+type Option<T extends string> = { value: T; label: string };
+type OptionSelectProps<T extends string> = {
+  value: T;
+  options: Option<T>[];
+  onChange: (value: T) => void;
+};
+function OptionSelect<T extends string>({ value, options, onChange }: OptionSelectProps<T>) {
+  const [menuCords, setMenuCords] = useState<RectCords>();
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  const handleSelect = (v: T) => {
+    onChange(v);
+    setMenuCords(undefined);
+  };
+
+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setMenuCords(evt.currentTarget.getBoundingClientRect());
+  };
+
+  return (
+    <>
+      <Button
+        size="300"
+        variant="Secondary"
+        outlined
+        fill="Soft"
+        radii="300"
+        after={<Icon size="300" src={Icons.ChevronBottom} />}
+        onClick={handleMenu}
+      >
+        <Text size="T300" truncate>
+          {current.label}
+        </Text>
+      </Button>
+      <PopOut
+        anchor={menuCords}
+        offset={5}
+        position="Bottom"
+        align="End"
+        content={
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              onDeactivate: () => setMenuCords(undefined),
+              clickOutsideDeactivates: true,
+              isKeyForward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
+              isKeyBackward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
+              escapeDeactivates: stopPropagation,
+            }}
+          >
+            <Menu>
+              <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+                {options.map((option) => (
+                  <MenuItem
+                    key={option.value}
+                    size="300"
+                    variant={option.value === current.value ? 'Primary' : 'Surface'}
+                    radii="300"
+                    onClick={() => handleSelect(option.value)}
+                  >
+                    <Text size="T300">{option.label}</Text>
+                  </MenuItem>
+                ))}
+              </Box>
+            </Menu>
+          </FocusTrap>
+        }
+      />
+    </>
+  );
+}
+
+const VOICE_GATE_OPTIONS: Option<VoiceGateLevel>[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+const SHARE_QUALITY_OPTIONS: Option<ScreenShareQuality>[] = [
+  { value: '720p30', label: '720p · 30 fps' },
+  { value: '1080p30', label: '1080p · 30 fps' },
+  { value: '1080p60', label: '1080p · 60 fps' },
+  { value: '1440p60', label: '1440p · 60 fps' },
+];
+
+const SHARE_CONTENT_OPTIONS: Option<ScreenShareContent>[] = [
+  { value: 'motion', label: 'Smooth motion' },
+  { value: 'detail', label: 'Sharp text' },
+];
+
 function Devices() {
   const [devices, refresh] = useMediaDevices();
   const needsAccess = devices.some((d) => d.kind !== 'audiooutput' && !d.label);
@@ -229,6 +327,7 @@ function Devices() {
 
 function Microphone() {
   const [noiseSuppression, setNoiseSuppression] = useSetting(settingsAtom, 'noiseSuppression');
+  const [voiceGate, setVoiceGate] = useSetting(settingsAtom, 'voiceGate');
 
   return (
     <Box direction="Column" gap="100">
@@ -241,7 +340,50 @@ function Microphone() {
             <Switch variant="Primary" value={noiseSuppression} onChange={setNoiseSuppression} />
           }
         />
+        <SettingTile
+          title="Voice Gate"
+          description="Silence your microphone between words, cutting keyboard clicks and hum that noise suppression lets through. Higher levels need you to speak louder. Applies immediately."
+          after={
+            <OptionSelect value={voiceGate} options={VOICE_GATE_OPTIONS} onChange={setVoiceGate} />
+          }
+        />
       </SequenceCard>
+    </Box>
+  );
+}
+
+function ScreenShare() {
+  const [quality, setQuality] = useSetting(settingsAtom, 'screenShareQuality');
+  const [content, setContent] = useSetting(settingsAtom, 'screenShareContent');
+  const [h264, setH264] = useSetting(settingsAtom, 'screenShareH264');
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Screen Share</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Quality"
+          description="Resolution and frame rate of your screen share. Higher settings need more upload bandwidth."
+          after={
+            <OptionSelect value={quality} options={SHARE_QUALITY_OPTIONS} onChange={setQuality} />
+          }
+        />
+        <SettingTile
+          title="Optimize For"
+          description="Smooth motion keeps the frame rate up on a slow connection (games, video). Sharp text keeps the picture crisp instead (code, documents)."
+          after={
+            <OptionSelect value={content} options={SHARE_CONTENT_OPTIONS} onChange={setContent} />
+          }
+        />
+        <SettingTile
+          title="Hardware Encoding (H.264)"
+          description="Encode your screen share with H.264, which most GPUs encode in hardware. Lowers CPU use; turn off if viewers see a black or frozen share."
+          after={<Switch variant="Primary" value={h264} onChange={setH264} />}
+        />
+      </SequenceCard>
+      <Text size="T200" priority="300">
+        Applies the next time you start sharing.
+      </Text>
     </Box>
   );
 }
@@ -291,6 +433,7 @@ export function VoiceVideo({ requestClose }: VoiceVideoProps) {
             <Box direction="Column" gap="700">
               <Devices />
               <Microphone />
+              <ScreenShare />
               <Sounds />
             </Box>
           </PageContent>

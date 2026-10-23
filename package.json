@@ -1,6 +1,6 @@
 {
   "name": "zennith",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Zenn's Forked Cinny Client",
   "main": "index.js",
   "type": "module",
@@ -46,6 +46,9 @@
     "@tanstack/react-query": "5.24.1",
     "@tanstack/react-query-devtools": "5.24.1",
     "@tanstack/react-virtual": "3.2.0",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/plugin-autostart": "2.7.0",
+    "@tauri-apps/plugin-global-shortcut": "2.4.1",
     "@tauri-apps/plugin-process": "2.4.0",
     "@tauri-apps/plugin-updater": "2.14.0",
     "@vanilla-extract/css": "1.9.3",

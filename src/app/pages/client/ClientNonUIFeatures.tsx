@@ -26,6 +26,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { DesktopIntegration, setUnreadBadge } from '../../plugins/desktop';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -66,10 +67,13 @@ function FaviconUpdater() {
       }
     });
 
+    // setUnreadBadge: taskbar badge in the desktop app.
     if (notification) {
       setFavicon(highlight ? LogoHighlightPNG : LogoUnreadPNG);
+      setUnreadBadge(highlight ? 'highlight' : 'unread');
     } else {
       setFavicon(LogoPNG);
+      setUnreadBadge('none');
     }
   }, [roomToUnread]);
 
@@ -265,6 +269,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
+      <DesktopIntegration />
       {children}
     </>
   );

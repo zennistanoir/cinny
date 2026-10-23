@@ -9,6 +9,9 @@ export type DateFormat =
   | 'YYYY-MM-DD'
   | '';
 export type MessageSpacing = '0' | '100' | '200' | '300' | '400' | '500';
+export type VoiceGateLevel = 'off' | 'low' | 'medium' | 'high';
+export type ScreenShareQuality = '720p30' | '1080p30' | '1080p60' | '1440p60';
+export type ScreenShareContent = 'motion' | 'detail';
 export enum MessageLayout {
   Modern = 0,
   Compact = 1,
@@ -54,7 +57,16 @@ export interface Settings {
   keybindToggleNoiseSuppression?: string;
 
   noiseSuppression: boolean;
+  voiceGate: VoiceGateLevel;
   callToggleSounds: boolean;
+
+  screenShareQuality: ScreenShareQuality;
+  screenShareContent: ScreenShareContent;
+  screenShareH264: boolean;
+
+  // Desktop app only.
+  globalCallHotkeys: boolean;
+  closeToTray: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -96,7 +108,15 @@ const defaultSettings: Settings = {
   keybindToggleNoiseSuppression: 'ctrl+shift+x',
 
   noiseSuppression: true,
+  voiceGate: 'off',
   callToggleSounds: true,
+
+  screenShareQuality: '1080p30',
+  screenShareContent: 'motion',
+  screenShareH264: false,
+
+  globalCallHotkeys: true,
+  closeToTray: true,
 };
 
 export const getSettings = () => {

@@ -6,6 +6,7 @@ import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { SequenceCardStyle } from '../styles.css';
+import { DesktopHotkeysSetting } from '../../../plugins/desktop';
 
 type KeybindsProps = {
   requestClose: () => void;
@@ -208,6 +209,7 @@ export function Keybinds({ requestClose }: KeybindsProps) {
                     label="Toggle Noise Suppression"
                     description="Hotkey to turn microphone noise suppression on/off. Works in and out of calls."
                   />
+                  <DesktopHotkeysSetting />
                 </Box>
               </Box>
             </Box>

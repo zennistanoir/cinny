@@ -73,9 +73,38 @@ function injectVoiceTreeStyles() {
     '  flex-shrink: 0 !important;',
     '  overflow: hidden !important;',
     '}',
+    // Ring drawn with box-shadow so it never shifts the row's layout.
+    '.zennith-voice-avatar {',
+    '  transition: box-shadow 120ms ease-out;',
+    '}',
     '.zennith-voice-avatar.speaking {',
-    '  border: 2px solid #23a55a !important;',
-    '  box-shadow: 0 0 6px rgba(35, 165, 90, 0.6) !important;',
+    '  box-shadow: 0 0 0 2px #23a55a, 0 0 6px 1px rgba(35, 165, 90, 0.6) !important;',
+    '}',
+    '@media (prefers-reduced-motion: reduce) {',
+    '  .zennith-voice-avatar { transition: none; }',
+    '}',
+    '.zennith-voice-live {',
+    '  flex-shrink: 0;',
+    '  margin-left: auto;',
+    '  background: #f23f43;',
+    '  color: #fff;',
+    '  border-radius: 4px;',
+    '  padding: 0 4px;',
+    '  font-size: 10px;',
+    '  font-weight: 700;',
+    '  letter-spacing: 0.04em;',
+    '  line-height: 15px;',
+    '}',
+    '.zennith-voice-volume-row {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  gap: 8px;',
+    '}',
+    '.zennith-voice-volume-row input[type=range] {',
+    '  flex: 1;',
+    '  min-width: 0;',
+    '  accent-color: #23a55a;',
+    '  cursor: pointer;',
     '}',
     '.zennith-voice-avatar img {',
     '  width: 100% !important;',
@@ -83,6 +112,8 @@ function injectVoiceTreeStyles() {
     '  object-fit: cover !important;',
     '}',
     '.zennith-voice-username {',
+    '  flex: 1;',
+    '  min-width: 0;',
     '  font-size: 13px !important;',
     '  color: #dbdee1 !important;',
     '  white-space: nowrap !important;',
@@ -156,14 +187,64 @@ import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
-import { useCallSpeakers } from '../../hooks/useCallSpeakers';
+import { setUserVolume, useCallPresence, useUserVolume } from '../../plugins/call/ecBridge';
 import { UserAvatar } from '../../components/user-avatar';
 
-function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
+function CallMemberVolume({ userId, displayName }: { userId: string; displayName: string }) {
+  const volume = useUserVolume(userId);
+  const percent = Math.round(volume * 100);
+
+  return (
+    <Menu style={{ width: toRem(220) }}>
+      <Box direction="Column" gap="200" style={{ padding: config.space.S300 }}>
+        <Text size="L400" truncate>
+          {displayName}
+        </Text>
+        <div className="zennith-voice-volume-row">
+          <IconButton
+            size="300"
+            radii="300"
+            variant="Surface"
+            fill="None"
+            aria-label={percent === 0 ? 'Unmute user' : 'Mute user'}
+            aria-pressed={percent === 0}
+            onClick={() => setUserVolume(userId, percent === 0 ? 1 : 0)}
+          >
+            <Icon size="100" src={percent === 0 ? Icons.VolumeMute : Icons.VolumeHigh} />
+          </IconButton>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={percent}
+            aria-label={`Volume for ${displayName}`}
+            aria-valuetext={`${percent}%`}
+            onChange={(evt) => setUserVolume(userId, Number(evt.currentTarget.value) / 100)}
+          />
+          <Text size="T200" style={{ minWidth: toRem(34), textAlign: 'right' }}>
+            {percent}%
+          </Text>
+        </div>
+        <Text size="T200" priority="300">
+          Saved for every call.
+        </Text>
+      </Box>
+    </Menu>
+  );
+}
+
+function CallMemberSubItem({
+  userId,
+  roomId,
+  spaceId,
+  inCall,
+}: {
   userId: string;
   roomId: string;
   spaceId?: string;
-  isSpeaking?: boolean;
+  // Speaking / sharing state only comes from the call we are in.
+  inCall?: boolean;
 }) {
   const mx = useMatrixClient();
   const profile = useUserProfile(userId);
@@ -173,8 +254,14 @@ function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
   const avatarUrl = profile.avatarUrl
     ? (mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined)
     : undefined;
+  const isSelf = userId === mx.getUserId();
+  const volume = useUserVolume(userId);
+  const presence = useCallPresence();
+  const isSpeaking = inCall && presence.speaking.has(userId);
+  const isSharing = inCall && presence.sharing.has(userId);
 
   const [imgError, setImgError] = useState(false);
+  const [volumeAnchor, setVolumeAnchor] = useState<RectCords>();
 
   // Discord-style colored avatar fallback — deterministic hue from userId.
   const hue = userId
@@ -182,15 +269,12 @@ function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
     : 0;
   const initial = (displayName || 'U').charAt(0).toUpperCase();
   const showFallback = !avatarUrl || imgError;
+  const avatarClass = `zennith-voice-avatar${isSpeaking ? ' speaking' : ''}`;
 
   const fallbackEl = (
     <div
+      className={avatarClass}
       style={{
-        width: '20px',
-        height: '20px',
-        minWidth: '20px',
-        minHeight: '20px',
-        borderRadius: '50%',
         backgroundColor: `hsl(${hue}, 50%, 45%)`,
         color: '#fff',
         fontSize: '11px',
@@ -198,7 +282,6 @@ function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        flexShrink: 0,
       }}
     >
       {initial}
@@ -217,9 +300,17 @@ function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
     }, 'Left');
   };
 
+  // Right-click: per-user volume instead of the room menu.
+  const handleContextMenu = (evt: React.MouseEvent) => {
+    if (isSelf) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+    setVolumeAnchor({ x: evt.clientX, y: evt.clientY, width: 0, height: 0 });
+  };
+
   const avatarEl = showFallback ? fallbackEl : (
     <img
-      className={`zennith-voice-avatar${isSpeaking ? ' speaking' : ''}`}
+      className={avatarClass}
       src={avatarUrl}
       alt={displayName}
       onError={() => setImgError(true)}
@@ -227,10 +318,44 @@ function CallMemberSubItem({ userId, roomId, spaceId, isSpeaking }: {
   );
 
   return (
-    <div className="zennith-voice-user-item" onClick={handleOpenProfile} style={{ cursor: 'pointer' }}>
-      {avatarEl}
-      <span className="zennith-voice-username">{displayName}</span>
-    </div>
+    <PopOut
+      anchor={volumeAnchor}
+      position="Right"
+      align="Start"
+      content={
+        <FocusTrap
+          focusTrapOptions={{
+            initialFocus: false,
+            returnFocusOnDeactivate: false,
+            onDeactivate: () => setVolumeAnchor(undefined),
+            clickOutsideDeactivates: true,
+            escapeDeactivates: stopPropagation,
+          }}
+        >
+          <CallMemberVolume userId={userId} displayName={displayName} />
+        </FocusTrap>
+      }
+    >
+      <div
+        className="zennith-voice-user-item"
+        onClick={handleOpenProfile}
+        onContextMenu={handleContextMenu}
+        style={{ cursor: 'pointer' }}
+        title={isSelf ? undefined : 'Right-click to change volume'}
+      >
+        {avatarEl}
+        <span className="zennith-voice-username">{displayName}</span>
+        {!isSelf && volume < 1 && (
+          <Icon
+            size="50"
+            src={volume === 0 ? Icons.VolumeMute : Icons.VolumeHigh}
+            style={{ opacity: config.opacity.P300, flexShrink: 0 }}
+            aria-label={volume === 0 ? 'Muted by you' : `Volume ${Math.round(volume * 100)}%`}
+          />
+        )}
+        {isSharing && <span className="zennith-voice-live">LIVE</span>}
+      </div>
+    </PopOut>
   );
 }
 
@@ -562,6 +687,7 @@ export function RoomNavItem({
                 userId={member.userId}
                 roomId={room.roomId}
                 spaceId={space?.roomId}
+                inCall={callEmbed?.roomId === room.roomId}
               />
             ))}
             {callMembers.length > 10 && (

@@ -10,6 +10,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
 import path from 'path';
 import buildConfig from './build.config';
+import { patchElementCall } from './scripts/patchElementCall.js';
 
 const copyFiles = {
   targets: [
@@ -39,6 +40,11 @@ const copyFiles = {
       src: 'node_modules/@sapphi-red/web-noise-suppressor/dist/rnnoise/workletProcessor.js',
       dest: 'public/rnnoise',
       rename: 'rnnoiseWorklet.js',
+    },
+    {
+      src: 'node_modules/@sapphi-red/web-noise-suppressor/dist/noiseGate/workletProcessor.js',
+      dest: 'public/rnnoise',
+      rename: 'noiseGateWorklet.js',
     },
     {
       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
@@ -129,6 +135,8 @@ export default defineConfig({
       promiseImportName: (i) => `__tla_${i}`,
     }),
     viteStaticCopy(copyFiles),
+    // Must follow viteStaticCopy: patches the Element Call bundle it copied.
+    patchElementCall('dist'),
     vanillaExtractPlugin(),
     wasm(),
     react(),
