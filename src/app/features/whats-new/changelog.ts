@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.8',
+    items: [
+      "Message drafts are kept per room, so a half-written message is still there when you come back.",
+      'Room list shows unread counts, mentions, typing and muted icons again, plus DM avatars.',
+      'Hover a voice channel member to get a volume button (right-click still works).',
+      'Violet theme has a deeper accent and clearer contrast between panels.',
+      'Hang up and Reject buttons are red, and call controls work better with screen readers.',
+      'Animations are reduced when your system asks for reduced motion.',
+    ],
+  },
+  {
     version: '0.1.7',
     items: [
       'Mic test in Settings → Voice & Video, with a level meter that shows where Voice Gate opens.',

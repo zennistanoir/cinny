@@ -1,5 +1,5 @@
 import React, { KeyboardEventHandler, useState } from 'react';
-import { Box, Icon, IconButton, Icons, Scroll, Switch, Text, toRem } from 'folds';
+import { Box, Icon, IconButton, Icons, Scroll, Switch, Text, color, toRem } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
@@ -129,8 +129,16 @@ function KeybindInput({
         description={description}
         after={
           <Box alignItems="Center" gap="200">
-            <Switch variant="Primary" value={enabled} onChange={handleToggle} />
+            <Switch
+              variant="Primary"
+              value={enabled}
+              onChange={handleToggle}
+              aria-label={`Enable ${label} shortcut`}
+            />
             <Box
+              role="button"
+              aria-label={`Record shortcut for ${label}`}
+              aria-pressed={recording}
               tabIndex={0}
               onKeyDown={handleKeyDown}
               onFocus={startRecording}
@@ -143,10 +151,10 @@ function KeybindInput({
                 height: toRem(36),
                 borderRadius: toRem(8),
                 cursor: enabled ? 'pointer' : 'not-allowed',
-                backgroundColor: recording ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-                border: recording
-                  ? '1px solid rgba(139, 92, 246, 0.5)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: recording ? color.Primary.Container : 'transparent',
+                border: `1px solid ${
+                  recording ? color.Primary.ContainerLine : color.SurfaceVariant.ContainerLine
+                }`,
                 opacity: enabled ? 1 : 0.4,
                 transition: 'border-color 0.15s, background-color 0.15s',
               }}

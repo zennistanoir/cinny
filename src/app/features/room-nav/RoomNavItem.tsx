@@ -3,6 +3,7 @@ import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react
 // Inject voice-channel participant tree styles once globally.
 // Uses !important to override folds NavItem display:flex.
 let voiceTreeStylesInjected = false;
+// Colors come from folds theme vars so every theme (incl. light Lavender) applies.
 function injectVoiceTreeStyles() {
   if (voiceTreeStylesInjected || typeof document === 'undefined') return;
   voiceTreeStylesInjected = true;
@@ -36,10 +37,24 @@ function injectVoiceTreeStyles() {
     '}',
     '.channel-name {',
     '  font-size: 14px !important;',
-    '  color: #949ba4 !important;',
+    `  color: ${color.Background.OnContainer};`,
+    `  opacity: ${config.opacity.P400};`,
     '  white-space: nowrap !important;',
     '  overflow: hidden !important;',
     '  text-overflow: ellipsis !important;',
+    '}',
+    '.channel-name.unread, [aria-selected=true] .channel-name {',
+    '  opacity: 1;',
+    '}',
+    '.channel-name.unread {',
+    '  font-weight: 600;',
+    '}',
+    '.zennith-channel-status {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  gap: 4px;',
+    '  flex-shrink: 0;',
+    '  margin-left: 4px;',
     '}',
     '.zennith-voice-user-tree {',
     '  display: flex !important;',
@@ -58,8 +73,41 @@ function injectVoiceTreeStyles() {
     '  border-radius: 4px !important;',
     '  padding: 0 6px !important;',
     '}',
-    '.zennith-voice-user-item:hover {',
-    '  background: rgba(255, 255, 255, 0.05) !important;',
+    '.zennith-voice-user-item:hover, .zennith-voice-user-item:focus-within {',
+    `  background: ${color.Background.ContainerHover} !important;`,
+    '}',
+    '.zennith-voice-user-main {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  gap: 8px;',
+    '  flex: 1;',
+    '  min-width: 0;',
+    '  height: 100%;',
+    '  padding: 0;',
+    '  border: 0;',
+    '  background: none;',
+    '  color: inherit;',
+    '  font: inherit;',
+    '  text-align: left;',
+    '  cursor: pointer;',
+    '}',
+    '.zennith-voice-user-main:focus-visible {',
+    `  outline: 2px solid ${color.Primary.Main};`,
+    '  outline-offset: -2px;',
+    '  border-radius: 4px;',
+    '}',
+    // Hidden until hover/focus; always shown on touch screens (no hover).
+    '.zennith-voice-volume-btn {',
+    '  opacity: 0;',
+    '  flex-shrink: 0;',
+    '}',
+    '.zennith-voice-user-item:hover .zennith-voice-volume-btn,',
+    '.zennith-voice-user-item:focus-within .zennith-voice-volume-btn,',
+    '.zennith-voice-volume-btn[aria-pressed=true] {',
+    '  opacity: 1;',
+    '}',
+    '@media (hover: none) {',
+    '  .zennith-voice-volume-btn { opacity: 1; }',
     '}',
     '.zennith-voice-avatar {',
     '  width: 20px !important;',
@@ -78,7 +126,7 @@ function injectVoiceTreeStyles() {
     '  transition: box-shadow 120ms ease-out;',
     '}',
     '.zennith-voice-avatar.speaking {',
-    '  box-shadow: 0 0 0 2px #23a55a, 0 0 6px 1px rgba(35, 165, 90, 0.6) !important;',
+    `  box-shadow: 0 0 0 2px ${color.Success.Main}, 0 0 6px 1px ${color.Success.Main} !important;`,
     '}',
     '@media (prefers-reduced-motion: reduce) {',
     '  .zennith-voice-avatar { transition: none; }',
@@ -86,8 +134,8 @@ function injectVoiceTreeStyles() {
     '.zennith-voice-live {',
     '  flex-shrink: 0;',
     '  margin-left: auto;',
-    '  background: #f23f43;',
-    '  color: #fff;',
+    `  background: ${color.Critical.Main};`,
+    `  color: ${color.Critical.OnMain};`,
     '  border-radius: 4px;',
     '  padding: 0 4px;',
     '  font-size: 10px;',
@@ -103,7 +151,7 @@ function injectVoiceTreeStyles() {
     '.zennith-voice-volume-row input[type=range] {',
     '  flex: 1;',
     '  min-width: 0;',
-    '  accent-color: #23a55a;',
+    `  accent-color: ${color.Success.Main};`,
     '  cursor: pointer;',
     '}',
     '.zennith-voice-avatar img {',
@@ -115,7 +163,7 @@ function injectVoiceTreeStyles() {
     '  flex: 1;',
     '  min-width: 0;',
     '  font-size: 13px !important;',
-    '  color: #dbdee1 !important;',
+    `  color: ${color.Background.OnContainer} !important;`,
     '  white-space: nowrap !important;',
     '  overflow: hidden !important;',
     '  text-overflow: ellipsis !important;',
@@ -140,6 +188,7 @@ import {
   RectCords,
   Badge,
   Spinner,
+  color,
 } from 'folds';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
@@ -288,7 +337,7 @@ function CallMemberSubItem({
     </div>
   );
 
-  const handleOpenProfile = (evt: React.MouseEvent) => {
+  const handleOpenProfile = (evt: React.MouseEvent<HTMLElement>) => {
     evt.preventDefault();
     evt.stopPropagation();
     const rect = (evt.currentTarget as HTMLElement).getBoundingClientRect();
@@ -307,6 +356,17 @@ function CallMemberSubItem({
     evt.stopPropagation();
     setVolumeAnchor({ x: evt.clientX, y: evt.clientY, width: 0, height: 0 });
   };
+
+  // Click/keyboard/touch path to the same volume popout.
+  const handleOpenVolume = (evt: React.MouseEvent<HTMLButtonElement>) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    setVolumeAnchor(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const status = [isSpeaking && 'speaking', isSharing && 'sharing screen']
+    .filter(Boolean)
+    .join(', ');
 
   const avatarEl = showFallback ? fallbackEl : (
     <img
@@ -336,24 +396,41 @@ function CallMemberSubItem({
         </FocusTrap>
       }
     >
-      <div
-        className="zennith-voice-user-item"
-        onClick={handleOpenProfile}
-        onContextMenu={handleContextMenu}
-        style={{ cursor: 'pointer' }}
-        title={isSelf ? undefined : 'Right-click to change volume'}
-      >
-        {avatarEl}
-        <span className="zennith-voice-username">{displayName}</span>
-        {!isSelf && volume < 1 && (
-          <Icon
-            size="50"
-            src={volume === 0 ? Icons.VolumeMute : Icons.VolumeHigh}
-            style={{ opacity: config.opacity.P300, flexShrink: 0 }}
-            aria-label={volume === 0 ? 'Muted by you' : `Volume ${Math.round(volume * 100)}%`}
-          />
+      <div className="zennith-voice-user-item" onContextMenu={handleContextMenu}>
+        <button
+          type="button"
+          className="zennith-voice-user-main"
+          onClick={handleOpenProfile}
+          aria-label={status ? `${displayName}, ${status}` : displayName}
+        >
+          {avatarEl}
+          <span className="zennith-voice-username">{displayName}</span>
+          {!isSelf && volume < 1 && (
+            <Icon
+              size="50"
+              src={volume === 0 ? Icons.VolumeMute : Icons.VolumeHigh}
+              style={{ opacity: config.opacity.P300, flexShrink: 0 }}
+              aria-label={volume === 0 ? 'Muted by you' : `Volume ${Math.round(volume * 100)}%`}
+            />
+          )}
+          {isSharing && <span className="zennith-voice-live">LIVE</span>}
+        </button>
+        {!isSelf && (
+          <IconButton
+            className="zennith-voice-volume-btn"
+            onClick={handleOpenVolume}
+            aria-label={`Volume for ${displayName}`}
+            aria-pressed={!!volumeAnchor}
+            title="Volume"
+            variant="Background"
+            fill="None"
+            size="300"
+            radii="300"
+            style={{ width: toRem(24), height: toRem(24), minWidth: toRem(24) }}
+          >
+            <Icon size="50" src={Icons.VolumeHigh} />
+          </IconButton>
         )}
-        {isSharing && <span className="zennith-voice-live">LIVE</span>}
       </div>
     </PopOut>
   );
@@ -584,6 +661,10 @@ export function RoomNavItem({
   const optionsVisible = hover || !!menuAnchor;
   const callSession = useCallSession(room);
   const callMembers = useCallMembers(callSession);
+  // One row per user even when they are in the call from several devices.
+  const voiceUsers = callMembers.filter(
+    (member, index) => callMembers.findIndex((m) => m.userId === member.userId) === index
+  );
   const startCall = useCallStart(direct);
   const callEmbed = useCallEmbed();
   const space = useSpaceOptionally();
@@ -646,38 +727,78 @@ export function RoomNavItem({
           }}
         >
           <div className="channel-title-group">
-            <RoomIcon
-              style={{
-                opacity: unread ? config.opacity.P500 : config.opacity.P300,
-                width: '24px',
-                height: '24px',
-                flexShrink: 0,
-              }}
-              filled={selected}
-              size="100"
-              joinRule={room.getJoinRule()}
-              roomType={room.getType()}
-            />
-            <span className="channel-name">{roomName}</span>
+            {showAvatar ? (
+              <Avatar size="200" radii="400" style={{ flexShrink: 0 }}>
+                <RoomAvatar
+                  roomId={room.roomId}
+                  src={
+                    direct
+                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
+                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+                  }
+                  alt={roomName}
+                  renderFallback={() => (
+                    <Text as="span" size="H6">
+                      {nameInitials(roomName)}
+                    </Text>
+                  )}
+                />
+              </Avatar>
+            ) : (
+              <RoomIcon
+                style={{
+                  opacity: unread ? config.opacity.P500 : config.opacity.P300,
+                  width: '24px',
+                  height: '24px',
+                  flexShrink: 0,
+                }}
+                filled={selected}
+                size="100"
+                joinRule={room.getJoinRule()}
+                roomType={room.getType()}
+              />
+            )}
+            <span className={unread ? 'channel-name unread' : 'channel-name'}>{roomName}</span>
           </div>
+          {!optionsVisible && (
+            <div className="zennith-channel-status">
+              {!unread && !selected && typingMember.length > 0 && (
+                <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
+                  <TypingIndicator size="300" disableAnimation />
+                </Badge>
+              )}
+              {unread && (
+                <UnreadBadgeCenter>
+                  <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+                </UnreadBadgeCenter>
+              )}
+              {notificationMode && notificationMode !== RoomNotificationMode.Unset && (
+                <Icon
+                  size="50"
+                  src={getRoomNotificationModeIcon(notificationMode)}
+                  aria-label={notificationMode}
+                />
+              )}
+            </div>
+          )}
         </NavLink>
 
         {/* 2. Connected Users Tree — STRICTLY OUTSIDE AND BELOW THE HEADER */}
-        {callMembers.length > 0 && (
+        {voiceUsers.length > 0 && (
           <div className="zennith-voice-user-tree">
-            {callMembers.slice(0, 10).map((member) => (
+            {voiceUsers.slice(0, 10).map((member) => (
               <CallMemberSubItem
-                key={member.deviceId || member.memberId}
+                key={member.userId}
                 userId={member.userId}
                 roomId={room.roomId}
                 spaceId={space?.roomId}
                 inCall={callEmbed?.roomId === room.roomId}
               />
             ))}
-            {callMembers.length > 10 && (
-              <div style={{ paddingLeft: '28px' }}>
+            {voiceUsers.length > 10 && (
+              <div style={{ padding: '0 6px' }}>
                 <Text priority="300" size="T200">
-                  +{callMembers.length - 10} more
+                  +{voiceUsers.length - 10} more
                 </Text>
               </div>
             )}

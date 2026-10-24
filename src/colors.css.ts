@@ -204,7 +204,7 @@ const violetThemeData = {
     Container: '#0A0A0C',
     ContainerHover: '#141418',
     ContainerActive: '#1C1C22',
-    ContainerLine: '#26262E',
+    ContainerLine: '#2E2E38',
     OnContainer: '#E8E6F0',
   },
 
@@ -216,19 +216,21 @@ const violetThemeData = {
     OnContainer: '#E8E6F0',
   },
 
+  // One step above Surface, matching the darkSurfaces ramp.
   SurfaceVariant: {
-    Container: '#0F0F12',
-    ContainerHover: '#141418',
-    ContainerActive: '#1C1C22',
-    ContainerLine: '#26262E',
+    Container: '#18181D',
+    ContainerHover: '#1F1F25',
+    ContainerActive: '#26262E',
+    ContainerLine: '#303038',
     OnContainer: '#E8E6F0',
   },
 
+  // #7C3AED keeps white button text above 4.5:1.
   Primary: {
-    Main: '#8B5CF6',
-    MainHover: '#7C3AED',
-    MainActive: '#6D28D9',
-    MainLine: '#5B21B6',
+    Main: '#7C3AED',
+    MainHover: '#6D28D9',
+    MainActive: '#5B21B6',
+    MainLine: '#4C1D95',
     OnMain: '#FFFFFF',
     Container: '#2D1B69',
     ContainerHover: '#35207A',

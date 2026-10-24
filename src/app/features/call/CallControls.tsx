@@ -151,7 +151,6 @@ export function CallControls({ callEmbed }: CallControlsProps) {
           variant="Critical"
           fill="Solid"
           radii="Pill"
-          style={{ backgroundColor: '#f23f43', color: '#ffffff' }}
           onClick={hangup}
           before={
             exiting ? (
@@ -225,6 +224,8 @@ export function CallControls({ callEmbed }: CallControlsProps) {
             onClick={handleOpenMenu}
             outlined
             aria-pressed={!!cords}
+            aria-label="More call options"
+            aria-haspopup="menu"
           >
             <Icon size="400" src={Icons.VerticalDots} />
           </IconButton>

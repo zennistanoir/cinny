@@ -71,6 +71,7 @@ import {
   TUploadItem,
   TUploadMetadata,
   roomIdToMsgDraftAtomFamily,
+  storeMsgDraft,
   roomIdToReplyDraftAtomFamily,
   roomIdToUploadItemsAtomFamily,
   roomUploadAtomFamily,
@@ -229,6 +230,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       Transforms.insertFragment(editor, msgDraft);
     }, [editor, msgDraft]);
 
+    // Keep the stored draft current so a reload or app restart doesn't lose it.
+    const persistDraft = useCallback(() => {
+      storeMsgDraft(
+        roomId,
+        isEmptyEditor(editor) ? [] : JSON.parse(JSON.stringify(editor.children))
+      );
+    }, [roomId, editor]);
+
+    useEffect(() => {
+      window.addEventListener('pagehide', persistDraft);
+      return () => window.removeEventListener('pagehide', persistDraft);
+    }, [persistDraft]);
+
     useEffect(
       () => () => {
         if (!isEmptyEditor(editor)) {
@@ -334,6 +348,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
         resetEditor(editor);
         resetEditorHistory(editor);
+        storeMsgDraft(roomId, []);
         sendTypingStatus(false);
         return;
       }
@@ -375,6 +390,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       mx.sendMessage(roomId, content as any);
       resetEditor(editor);
       resetEditorHistory(editor);
+      storeMsgDraft(roomId, []);
       setReplyDraft(undefined);
       sendTypingStatus(false);
     }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
@@ -410,6 +426,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (!hideActivity) {
           sendTypingStatus(!isEmptyEditor(editor));
         }
+        persistDraft();
 
         const prevWordRange = getPrevWordRange(editor);
         const query = prevWordRange
@@ -417,7 +434,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           : undefined;
         setAutocompleteQuery(query);
       },
-      [editor, sendTypingStatus, hideActivity]
+      [editor, sendTypingStatus, hideActivity, persistDraft]
     );
 
     const handleCloseAutocomplete = useCallback(() => {

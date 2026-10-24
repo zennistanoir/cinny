@@ -39,6 +39,8 @@ export function MicrophoneButton({ enabled, onToggle }: MicrophoneButtonProps) {
           onClick={toggleMic}
           outlined
           disabled={loading}
+          aria-label="Mute microphone"
+          aria-pressed={!enabled}
         >
           <Icon size="400" src={enabled ? Icons.Mic : Icons.MicMute} filled={!enabled} />
         </IconButton>
@@ -71,6 +73,8 @@ export function SoundButton({ enabled, onToggle }: SoundButtonProps) {
           size="400"
           onClick={() => onToggle()}
           outlined
+          aria-label="Deafen"
+          aria-pressed={!enabled}
         >
           <Icon
             size="400"
@@ -111,6 +115,8 @@ export function VideoButton({ enabled, onToggle }: VideoButtonProps) {
           onClick={toggleVideo}
           outlined
           disabled={loading}
+          aria-label="Camera"
+          aria-pressed={enabled}
         >
           <Icon
             size="400"
@@ -150,6 +156,8 @@ export function ScreenShareButton({ enabled, onClick, open }: ScreenShareButtonP
           onClick={onClick}
           outlined
           aria-pressed={open}
+          aria-haspopup="dialog"
+          aria-label={enabled ? 'Stream settings' : 'Share screen'}
         >
           <Icon size="400" src={Icons.ScreenShare} filled={enabled} />
         </IconButton>
@@ -180,6 +188,8 @@ export function ChatButton() {
           size="400"
           onClick={() => setChat(!chat)}
           outlined
+          aria-label="Call chat"
+          aria-pressed={chat}
         >
           <Icon size="400" src={Icons.Message} filled={chat} />
         </IconButton>

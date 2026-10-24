@@ -64,7 +64,9 @@ export function CallMemberCard({ member }: CallMemberCardProps) {
             {name}
           </Text>
         </Box>
-        {audioOnly && <Icon src={Icons.VideoCameraMute} size="100" />}
+        {audioOnly && (
+          <Icon src={Icons.VideoCameraMute} size="100" aria-label="Camera off" />
+        )}
       </Box>
     </SequenceCard>
   );

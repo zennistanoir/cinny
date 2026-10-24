@@ -110,7 +110,12 @@ function ScreenSharePanel({ sharing, onToggle }: ScreenSharePanelProps) {
             {sharing ? 'Applies the next time you go live.' : 'Lowers CPU use.'}
           </Text>
         </Box>
-        <Switch variant="Primary" value={h264} onChange={setH264} />
+        <Switch
+          variant="Primary"
+          value={h264}
+          onChange={setH264}
+          aria-label="Hardware Encoding (H.264)"
+        />
       </Box>
       {sharing ? (
         <Button

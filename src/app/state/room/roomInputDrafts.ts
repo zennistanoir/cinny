@@ -37,11 +37,40 @@ export type RoomIdToMsgAction =
       roomId: string;
     };
 
-const createMsgDraftAtom = () => atom<Descendant[]>([]);
+// Drafts are mirrored to localStorage so they survive reloads and app restarts.
+const MSG_DRAFT_KEY_PREFIX = 'zennith.draft.';
+
+const loadStoredMsgDraft = (roomId: string): Descendant[] => {
+  try {
+    const raw = localStorage.getItem(MSG_DRAFT_KEY_PREFIX + roomId);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const storeMsgDraft = (roomId: string, msg: Descendant[]) => {
+  try {
+    if (msg.length === 0) localStorage.removeItem(MSG_DRAFT_KEY_PREFIX + roomId);
+    else localStorage.setItem(MSG_DRAFT_KEY_PREFIX + roomId, JSON.stringify(msg));
+  } catch {
+    // Storage full or unavailable: the in-memory draft still works.
+  }
+};
+
+const createMsgDraftAtom = (roomId: string) => {
+  const baseAtom = atom<Descendant[]>(loadStoredMsgDraft(roomId));
+  return atom(
+    (get) => get(baseAtom),
+    (get, set, msg: Descendant[]) => {
+      set(baseAtom, msg);
+      storeMsgDraft(roomId, msg);
+    }
+  );
+};
 export type TMsgDraftAtom = ReturnType<typeof createMsgDraftAtom>;
-export const roomIdToMsgDraftAtomFamily = atomFamily<string, TMsgDraftAtom>(() =>
-  createMsgDraftAtom()
-);
+export const roomIdToMsgDraftAtomFamily = atomFamily<string, TMsgDraftAtom>(createMsgDraftAtom);
 
 export type IReplyDraft = {
   userId: string;
