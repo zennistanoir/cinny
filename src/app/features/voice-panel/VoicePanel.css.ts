@@ -1,5 +1,5 @@
 import { style } from '@vanilla-extract/css';
-import { color, config } from 'folds';
+import { color, config, toRem } from 'folds';
 
 export const VoicePanel = style({
   flexShrink: 0,
@@ -35,5 +35,20 @@ export const TowerIcon = style({
 });
 
 export const HangupButton = style({
+  flexShrink: 0,
+});
+export const Actions = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  gap: config.space.S200,
+});
+
+export const ActionButton = style({
+  width: '100%',
+});
+
+export const ActionSvgIcon = style({
+  width: toRem(16),
+  height: toRem(16),
   flexShrink: 0,
 });

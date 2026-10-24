@@ -9,6 +9,7 @@ import {
   enable as enableAutostart,
   isEnabled as isAutostartEnabled,
 } from '@tauri-apps/plugin-autostart';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { callEmbedAtom } from '../../state/callEmbed';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -187,6 +188,54 @@ function CloseToTraySync() {
   return null;
 }
 
+// --- External links ------------------------------------------------------------------
+
+// The webview won't open new windows, so links to other sites go to the system browser.
+const getExternalUrl = (href: string): string | undefined => {
+  let url: URL;
+  try {
+    url = new URL(href, window.location.href);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol === 'mailto:') return url.href;
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+  return url.origin === window.location.origin ? undefined : url.href;
+};
+
+function ExternalLinks() {
+  useEffect(() => {
+    // Bubble phase on window, so in-app handlers (mentions, room links) that call
+    // preventDefault get the click first.
+    const handleClick = (evt: MouseEvent) => {
+      if (evt.defaultPrevented || evt.button > 1) return;
+      const anchor = (evt.target as Element | null)?.closest?.('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download')) return;
+      const url = getExternalUrl(anchor.href);
+      if (!url) return;
+      evt.preventDefault();
+      openUrl(url).catch((err) => console.error('Failed to open link:', err));
+    };
+    window.addEventListener('click', handleClick);
+    window.addEventListener('auxclick', handleClick);
+
+    const nativeOpen = window.open;
+    window.open = (href?: string | URL, ...rest) => {
+      const url = href !== undefined ? getExternalUrl(href.toString()) : undefined;
+      if (!url) return nativeOpen.call(window, href, ...rest);
+      openUrl(url).catch((err) => console.error('Failed to open link:', err));
+      return null;
+    };
+
+    return () => {
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('auxclick', handleClick);
+      window.open = nativeOpen;
+    };
+  }, []);
+  return null;
+}
+
 // --- Restart to update -----------------------------------------------------------------
 
 function DesktopUpdateToast() {
@@ -234,6 +283,7 @@ export function DesktopIntegration() {
     <>
       <GlobalCallHotkeys />
       <CloseToTraySync />
+      <ExternalLinks />
       <DesktopUpdateToast />
     </>
   );

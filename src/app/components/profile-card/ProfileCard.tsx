@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -14,13 +14,12 @@ import {
   TooltipProvider,
   toRem,
 } from 'folds';
-import classNames from 'classnames';
 import FocusTrap from 'focus-trap-react';
 import { UserAvatar } from '../user-avatar';
 import { AvatarPresence, PresenceBadge } from '../presence';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { useUserPresence, Presence } from '../../hooks/useUserPresence';
+import { Presence } from '../../hooks/useUserPresence';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
@@ -29,19 +28,34 @@ import { Settings } from '../../features/settings';
 import { Modal500 } from '../Modal500';
 import { useCallEmbed } from '../../hooks/useCallEmbed';
 import { useCallControlState } from '../../plugins/call';
+import {
+  applyOwnStatus,
+  DND_STATUS_MSG,
+  getOwnStatus,
+  getSharedStatus,
+  OwnStatus,
+  shareOwnStatus,
+} from '../../utils/ownStatus';
+import { useAccountDataCallback } from '../../hooks/useAccountDataCallback';
+import { AccountDataEvent } from '../../../types/matrix/accountData';
 import * as css from './ProfileCard.css';
 
-const PRESENCE_OPTIONS: Array<{ presence: Presence; label: string; icon: 'User' | 'Clock' | 'Prohibited' | 'Power' }> = [
-  { presence: Presence.Online, label: 'Online', icon: 'User' },
-  { presence: Presence.Unavailable, label: 'Idle', icon: 'Clock' },
-  { presence: Presence.Offline, label: 'Do Not Disturb', icon: 'Prohibited' },
-  { presence: Presence.Offline, label: 'Invisible', icon: 'Power' },
+const STATUS_OPTIONS: Array<{
+  status: OwnStatus;
+  label: string;
+  icon: 'User' | 'Clock' | 'Prohibited' | 'Power';
+}> = [
+  { status: 'online', label: 'Online', icon: 'User' },
+  { status: 'idle', label: 'Idle', icon: 'Clock' },
+  { status: 'dnd', label: 'Do Not Disturb', icon: 'Prohibited' },
+  { status: 'invisible', label: 'Invisible', icon: 'Power' },
 ];
 
-const PresenceToStatus: Record<Presence, string> = {
-  [Presence.Online]: 'online',
-  [Presence.Unavailable]: 'unavailable',
-  [Presence.Offline]: 'offline',
+const StatusToPresence: Record<OwnStatus, Presence> = {
+  online: Presence.Online,
+  idle: Presence.Unavailable,
+  dnd: Presence.Unavailable,
+  invisible: Presence.Offline,
 };
 
 export function ProfileCard() {
@@ -49,7 +63,8 @@ export function ProfileCard() {
   const useAuthentication = useMediaAuthentication();
   const userId = mx.getUserId()!;
   const profile = useUserProfile(userId);
-  const presence = useUserPresence(userId);
+  // The badge follows the picked status rather than the server's echo, which lags.
+  const [status, setStatus] = useState<OwnStatus>(() => getOwnStatus(userId));
 
   const [statusAnchor, setStatusAnchor] = useState<RectCords>();
   const [settings, setSettings] = useState(false);
@@ -59,8 +74,6 @@ export function ProfileCard() {
   const avatarUrl = profile.avatarUrl
     ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
-
-  const currentPresence: Presence = presence?.presence ?? Presence.Offline;
 
   const callEmbed = useCallEmbed();
   // Always call the hook to avoid React error #310 (hooks must be consistent across renders).
@@ -82,16 +95,34 @@ export function ProfileCard() {
     setStatusAnchor(btn.getBoundingClientRect());
   };
 
-  const handleSetPresence = async (next: Presence) => {
+  const handleSetStatus = async (next: OwnStatus) => {
     setStatusAnchor(undefined);
-    // Map Discord-style picker options to Matrix presence states.
-    // Invisible is represented as `offline` locally.
+    setStatus(next);
+    shareOwnStatus(mx, next).catch(() => undefined);
     try {
-      await mx.setPresence({ presence: PresenceToStatus[next] });
+      await applyOwnStatus(mx, next);
     } catch {
-      // Presence update may fail silently — the local dot updates immediately regardless.
+      // The pick is stored and sent with every sync, so a failed update catches up.
     }
   };
+
+  // Follow a status picked on another Zennith client.
+  const followShared = useCallback(() => {
+    const shared = getSharedStatus(mx);
+    if (!shared || shared === getOwnStatus(userId)) return;
+    setStatus(shared);
+    applyOwnStatus(mx, shared).catch(() => undefined);
+  }, [mx, userId]);
+  useEffect(followShared, [followShared]);
+  useAccountDataCallback(
+    mx,
+    useCallback(
+      (evt) => {
+        if (evt.getType() === AccountDataEvent.ZennithStatus) followShared();
+      },
+      [followShared]
+    )
+  );
 
   return (
     <div className={css.ProfileCard}>
@@ -106,7 +137,12 @@ export function ProfileCard() {
       >
         <AvatarPresence
           variant="SurfaceVariant"
-          badge={<PresenceBadge presence={currentPresence} />}
+          badge={
+            <PresenceBadge
+              presence={StatusToPresence[status]}
+              status={status === 'dnd' ? DND_STATUS_MSG : undefined}
+            />
+          }
         >
           <Avatar size="300">
             <UserAvatar
@@ -128,7 +164,14 @@ export function ProfileCard() {
       </Box>
 
       <Box className={css.ProfileCardActions} alignItems="Center">
-        <TooltipProvider position="Top" tooltip={<Tooltip><Text size="T200">Mute</Text></Tooltip>}>
+        <TooltipProvider
+          position="Top"
+          tooltip={
+            <Tooltip>
+              <Text size="T200">Mute</Text>
+            </Tooltip>
+          }
+        >
           {(ref) => (
             <IconButton
               ref={ref}
@@ -144,7 +187,14 @@ export function ProfileCard() {
             </IconButton>
           )}
         </TooltipProvider>
-        <TooltipProvider position="Top" tooltip={<Tooltip><Text size="T200">Deafen</Text></Tooltip>}>
+        <TooltipProvider
+          position="Top"
+          tooltip={
+            <Tooltip>
+              <Text size="T200">Deafen</Text>
+            </Tooltip>
+          }
+        >
           {(ref) => (
             <IconButton
               ref={ref}
@@ -156,11 +206,22 @@ export function ProfileCard() {
               aria-pressed={!sound}
               onClick={handleDeafen}
             >
-              <Icon size="100" src={sound ? Icons.Headphone : Icons.HeadphoneMute} filled={!sound} />
+              <Icon
+                size="100"
+                src={sound ? Icons.Headphone : Icons.HeadphoneMute}
+                filled={!sound}
+              />
             </IconButton>
           )}
         </TooltipProvider>
-        <TooltipProvider position="Top" tooltip={<Tooltip><Text size="T200">Settings</Text></Tooltip>}>
+        <TooltipProvider
+          position="Top"
+          tooltip={
+            <Tooltip>
+              <Text size="T200">Settings</Text>
+            </Tooltip>
+          }
+        >
           {(ref) => (
             <IconButton
               ref={ref}
@@ -195,16 +256,16 @@ export function ProfileCard() {
           >
             <Menu style={{ maxWidth: toRem(220), width: '100vw' }}>
               <Box direction="Column" style={{ padding: '4px' }}>
-                {PRESENCE_OPTIONS.map((option) => {
-                  const selected = currentPresence === option.presence && option.label !== 'Invisible';
+                {STATUS_OPTIONS.map((option) => {
+                  const selected = status === option.status;
                   return (
                     <MenuItem
-                      key={option.label}
+                      key={option.status}
                       variant="Surface"
                       size="300"
                       radii="300"
                       aria-pressed={selected}
-                      onClick={() => handleSetPresence(option.presence)}
+                      onClick={() => handleSetStatus(option.status)}
                       before={<Icon size="100" src={Icons[option.icon]} filled={selected} />}
                     >
                       <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>

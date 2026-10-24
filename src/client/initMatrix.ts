@@ -3,6 +3,7 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
 import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
+import { applyOwnStatus, getOwnStatus } from '../app/utils/ownStatus';
 
 type Session = {
   baseUrl: string;
@@ -44,6 +45,9 @@ export const startClient = async (mx: MatrixClient) => {
   await mx.startClient({
     lazyLoadMembers: true,
   });
+  // Set right after starting, so the first /sync already carries the picked status.
+  const status = getOwnStatus(mx.getSafeUserId());
+  if (status !== 'online') applyOwnStatus(mx, status).catch(() => undefined);
 };
 
 export const clearCacheAndReload = async (mx: MatrixClient) => {

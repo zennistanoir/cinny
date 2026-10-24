@@ -13,6 +13,7 @@ import {
 import React, { ReactNode, useId } from 'react';
 import * as css from './styles.css';
 import { Presence, usePresenceLabel } from '../../hooks/useUserPresence';
+import { DND_STATUS_MSG } from '../../utils/ownStatus';
 
 const PresenceToColor: Record<Presence, MainColor> = {
   [Presence.Online]: 'Success',
@@ -28,6 +29,9 @@ type PresenceBadgeProps = {
 export function PresenceBadge({ presence, status, size = '300' }: PresenceBadgeProps) {
   const label = usePresenceLabel();
   const badgeLabelId = useId();
+  // Do Not Disturb travels as unavailable plus a fixed status message.
+  const dnd = presence === Presence.Unavailable && status === DND_STATUS_MSG;
+  const statusText = dnd ? undefined : status;
 
   return (
     <TooltipProvider
@@ -38,9 +42,9 @@ export function PresenceBadge({ presence, status, size = '300' }: PresenceBadgeP
       tooltip={
         <Tooltip id={badgeLabelId}>
           <Box style={{ maxWidth: toRem(250) }} alignItems="Baseline" gap="100">
-            <Text size="L400">{label[presence]}</Text>
-            {status && <Text size="T200">•</Text>}
-            {status && <Text size="T200">{status}</Text>}
+            <Text size="L400">{dnd ? DND_STATUS_MSG : label[presence]}</Text>
+            {statusText && <Text size="T200">•</Text>}
+            {statusText && <Text size="T200">{statusText}</Text>}
           </Box>
         </Tooltip>
       }
@@ -50,7 +54,7 @@ export function PresenceBadge({ presence, status, size = '300' }: PresenceBadgeP
           aria-labelledby={badgeLabelId}
           ref={triggerRef}
           size={size}
-          variant={PresenceToColor[presence]}
+          variant={dnd ? 'Critical' : PresenceToColor[presence]}
           fill={presence === Presence.Offline ? 'Soft' : 'Solid'}
           radii="Pill"
         />

@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.12',
+    items: [
+      'While you’re in a voice channel, the panel above your profile has camera, screen share, soundboard and noise suppression buttons.',
+      'Your status now sticks: pick Online, Idle, Do Not Disturb or Invisible from your avatar. Do Not Disturb shows a red dot, and your pick carries over to Zennith on your other devices.',
+      'Desktop app: links open in your web browser when you click them.',
+    ],
+  },
+  {
     version: '0.1.11',
     items: [
       'Fixed a crash when opening the soundboard in a space with no sounds, or while every sound was unavailable.',

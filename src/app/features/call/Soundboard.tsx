@@ -130,8 +130,14 @@ type SoundboardButtonProps = SoundboardPanelProps & {
   // The sidebar call bar uses smaller buttons than the call view.
   small?: boolean;
   disabled?: boolean;
+  className?: string;
 };
-export function SoundboardButton({ small, disabled, ...panel }: SoundboardButtonProps) {
+export function SoundboardButton({
+  small,
+  disabled,
+  className,
+  ...panel
+}: SoundboardButtonProps) {
   const [cords, setCords] = useState<RectCords>();
   // With no sounds, or every sound disabled, the panel has nothing to tab to and
   // focus-trap throws on activation; the menu itself is the fallback.
@@ -151,6 +157,7 @@ export function SoundboardButton({ small, disabled, ...panel }: SoundboardButton
         {(anchorRef) => (
           <IconButton
             ref={anchorRef}
+            className={className}
             variant={cords ? 'Primary' : 'Surface'}
             fill="Soft"
             radii={small ? '300' : '400'}
