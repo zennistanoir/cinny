@@ -1,5 +1,5 @@
 import React, { ComponentProps, MutableRefObject, ReactNode } from 'react';
-import { Box, Header, Line, Scroll, Text, as } from 'folds';
+import { Box, Header, Scroll, Text, as } from 'folds';
 import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import * as css from './style.css';
@@ -11,14 +11,9 @@ type PageRootProps = {
 };
 
 export function PageRoot({ nav, children }: PageRootProps) {
-  const screenSize = useScreenSizeContext();
-
   return (
     <Box grow="Yes" className={ContainerColor({ variant: 'Background' })}>
       {nav}
-      {screenSize !== ScreenSize.Mobile && (
-        <Line variant="Background" size="300" direction="Vertical" />
-      )}
       {children}
     </Box>
   );

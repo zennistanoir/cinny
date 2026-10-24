@@ -938,27 +938,6 @@ export const Message = as<'div', MessageProps>(
                 >
                   <Icon src={Icons.ReplyArrow} size="100" />
                 </IconButton>
-                {!isThreadedMessage && (
-                  <IconButton
-                    onClick={(ev) => onReplyClick(ev, true)}
-                    data-event-id={mEvent.getId()}
-                    variant="SurfaceVariant"
-                    size="300"
-                    radii="300"
-                  >
-                    <Icon src={Icons.ThreadPlus} size="100" />
-                  </IconButton>
-                )}
-                {canEditEvent(mx, mEvent) && onEditId && (
-                  <IconButton
-                    onClick={() => onEditId(mEvent.getId())}
-                    variant="SurfaceVariant"
-                    size="300"
-                    radii="300"
-                  >
-                    <Icon src={Icons.Pencil} size="100" />
-                  </IconButton>
-                )}
                 <PopOut
                   anchor={menuAnchor}
                   position="Bottom"

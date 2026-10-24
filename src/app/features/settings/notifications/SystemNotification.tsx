@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Box, Text, Switch, Button, color, Spinner } from 'folds';
+import { Box, Text, Switch, Button, color, Spinner, Input, toRem } from 'folds';
 import { IPusherRequest } from 'matrix-js-sdk';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
@@ -84,6 +84,48 @@ function EmailNotification() {
   );
 }
 
+function QuietHours() {
+  const [enabled, setEnabled] = useSetting(settingsAtom, 'quietHoursEnabled');
+  const [start, setStart] = useSetting(settingsAtom, 'quietHoursStart');
+  const [end, setEnd] = useSetting(settingsAtom, 'quietHoursEnd');
+
+  return (
+    <>
+      <SettingTile
+        title="Quiet Hours"
+        description="No popups or sounds between these times. Unread badges still update. Do Not Disturb silences them all day."
+        after={<Switch value={enabled} onChange={setEnabled} />}
+      />
+      {enabled && (
+        <Box gap="200" alignItems="Center" wrap="Wrap">
+          <Text size="T300">From</Text>
+          <Input
+            type="time"
+            aria-label="Quiet hours start"
+            value={start}
+            onChange={(evt) => evt.currentTarget.value && setStart(evt.currentTarget.value)}
+            variant="Secondary"
+            size="300"
+            radii="300"
+            style={{ width: toRem(120) }}
+          />
+          <Text size="T300">to</Text>
+          <Input
+            type="time"
+            aria-label="Quiet hours end"
+            value={end}
+            onChange={(evt) => evt.currentTarget.value && setEnd(evt.currentTarget.value)}
+            variant="Secondary"
+            size="300"
+            radii="300"
+            style={{ width: toRem(120) }}
+          />
+        </Box>
+      )}
+    </>
+  );
+}
+
 export function SystemNotification() {
   const notifPermission = usePermissionState('notifications', getNotificationState());
   const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -144,6 +186,14 @@ export function SystemNotification() {
           description="Play sound when new message arrive."
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
         />
+      </SequenceCard>
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
+        <QuietHours />
       </SequenceCard>
       <SequenceCard
         className={SequenceCardStyle}

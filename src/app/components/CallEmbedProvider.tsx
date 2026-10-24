@@ -58,6 +58,7 @@ import { getPowersLevelFromMatrixEvent } from '../hooks/usePowerLevels';
 import { getRoomCreatorsForRoomId } from '../hooks/useRoomCreators';
 import { getRoomPermissionsAPI } from '../hooks/useRoomPermissions';
 import { useLivekitSupport } from '../hooks/useLivekitSupport';
+import { useNotificationsSilenced } from '../hooks/useNotificationsSilenced';
 import { CallAvatarAnimation } from '../styles/Animations.css';
 import { webRTCSupported } from '../utils/rtc';
 import { useSetSetting, useSetting } from '../state/hooks/settings';
@@ -385,8 +386,11 @@ function IncomingCall({ dm, info, onIgnore, onAnswer, onReject }: IncomingCallPr
     audioElement?.play();
   }, []);
 
+  // Read once when the call arrives; changing status mid-ring doesn't start or stop it.
+  const isSilenced = useNotificationsSilenced();
+  const silencedRef = useRef(isSilenced);
   useEffect(() => {
-    if (info.notificationType === 'ring') {
+    if (info.notificationType === 'ring' && !silencedRef.current()) {
       playSound();
     }
   }, [playSound, info.notificationType]);

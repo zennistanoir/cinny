@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.13',
+    items: [
+      'Press Ctrl + / anywhere to see every keyboard shortcut, with a quick link from Settings → Keybinds.',
+      'Move between rooms without the mouse: Alt + ↑/↓ to step through, Alt + Shift + ↑/↓ to jump to unread, Esc to mark the current room read, Shift + Esc to clear every unread.',
+      'Right-click the Inbox icon in the sidebar for Mark All as Read, and there is a matching button next to the Inbox header.',
+      'Do Not Disturb now silences notification sounds and desktop popups while it is on, not only in the status badge.',
+    ],
+  },
+  {
     version: '0.1.12',
     items: [
       'While you’re in a voice channel, the panel above your profile has camera, screen share, soundboard and noise suppression buttons.',

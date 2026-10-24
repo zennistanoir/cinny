@@ -1,8 +1,13 @@
 import { style } from '@vanilla-extract/css';
-import { config } from 'folds';
+import { color, config } from 'folds';
 
 export const Header = style({
   borderBottomColor: 'transparent',
+});
+export const HeaderShadow = style({
+  position: 'relative',
+  zIndex: 1,
+  boxShadow: `0 1px 2px ${color.Other.Shadow}`,
 });
 export const HeaderTopic = style({
   ':hover': {

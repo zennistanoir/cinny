@@ -1,7 +1,7 @@
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { MatrixEvent, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
 import LogoPNG from '../../../../public/res/png/zennith.png';
 import LogoUnreadPNG from '../../../../public/res/png/zennith-unread.png';
@@ -31,6 +31,11 @@ import { WebUpdatePrompt } from '../../components/update-toast/WebUpdatePrompt';
 import { WhatsNew } from '../../features/whats-new/WhatsNew';
 import { ThemeKind, useTheme } from '../../hooks/useTheme';
 import '../../styles/accessibility.css';
+import { useNotificationsSilenced } from '../../hooks/useNotificationsSilenced';
+import { ownStatusAtom } from '../../state/ownStatus';
+import { applyOwnStatus, getOwnStatus, getSharedStatus } from '../../utils/ownStatus';
+import { useAccountDataCallback } from '../../hooks/useAccountDataCallback';
+import { AccountDataEvent } from '../../../types/matrix/accountData';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -79,7 +84,10 @@ function AccessibilityFeature() {
     };
 
     setAttr('data-motion', reducedMotion !== 'system' && reducedMotion);
-    setAttr('data-high-contrast', highContrast && (theme.kind === ThemeKind.Dark ? 'dark' : 'light'));
+    setAttr(
+      'data-high-contrast',
+      highContrast && (theme.kind === ThemeKind.Dark ? 'dark' : 'light')
+    );
     setAttr('data-focus-rings', focusRings && '');
     setAttr('data-underline-links', underlineLinks && '');
     setAttr('data-large-emoji', largeEmoji && '');
@@ -139,6 +147,35 @@ function FaviconUpdater() {
   return null;
 }
 
+// Keeps ownStatusAtom in step with this device's pick and with picks made on other devices.
+function OwnStatusSync() {
+  const mx = useMatrixClient();
+  const setStatus = useSetAtom(ownStatusAtom);
+
+  const followShared = useCallback(() => {
+    const userId = mx.getSafeUserId();
+    const shared = getSharedStatus(mx);
+    if (!shared || shared === getOwnStatus(userId)) {
+      setStatus(getOwnStatus(userId));
+      return;
+    }
+    setStatus(shared);
+    applyOwnStatus(mx, shared).catch(() => undefined);
+  }, [mx, setStatus]);
+  useEffect(followShared, [followShared]);
+  useAccountDataCallback(
+    mx,
+    useCallback(
+      (evt: MatrixEvent) => {
+        if (evt.getType() === AccountDataEvent.ZennithStatus) followShared();
+      },
+      [followShared]
+    )
+  );
+
+  return null;
+}
+
 function InviteNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const invites = useAtomValue(allInvitesAtom);
@@ -148,6 +185,7 @@ function InviteNotifications() {
   const navigate = useNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const isSilenced = useNotificationsSilenced();
 
   const notify = useCallback(
     (count: number) => {
@@ -173,6 +211,7 @@ function InviteNotifications() {
 
   useEffect(() => {
     if (invites.length > perviousInviteLen && mx.getSyncState() === 'SYNCING') {
+      if (isSilenced()) return;
       if (showNotifications && notificationPermission('granted')) {
         notify(invites.length - perviousInviteLen);
       }
@@ -181,7 +220,16 @@ function InviteNotifications() {
         playSound();
       }
     }
-  }, [mx, invites, perviousInviteLen, showNotifications, notificationSound, notify, playSound]);
+  }, [
+    mx,
+    invites,
+    perviousInviteLen,
+    showNotifications,
+    notificationSound,
+    notify,
+    playSound,
+    isSilenced,
+  ]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -199,6 +247,7 @@ function MessageNotifications() {
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const isSilenced = useNotificationsSilenced();
 
   const navigate = useNavigate();
   const notificationSelected = useInboxNotificationsSelected();
@@ -274,6 +323,8 @@ function MessageNotifications() {
       ) {
         return;
       }
+      // Checked after the unread cache update so the next event still compares correctly.
+      if (isSilenced()) return;
 
       if (showNotifications && notificationPermission('granted')) {
         const avatarMxc =
@@ -306,6 +357,7 @@ function MessageNotifications() {
     notify,
     selectedRoomId,
     useAuthentication,
+    isSilenced,
   ]);
 
   return (
@@ -327,6 +379,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <PageZoomFeature />
       <AccessibilityFeature />
       <FaviconUpdater />
+      <OwnStatusSync />
       <InviteNotifications />
       <MessageNotifications />
       <DesktopIntegration />

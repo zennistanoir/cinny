@@ -54,6 +54,7 @@ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
 import { useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
+import { usePublishNavRoomList } from '../../../state/navRoomList';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { PageNavFooter } from '../../../components/page-nav-footer';
@@ -423,6 +424,22 @@ export function Space() {
     useCallback(
       (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),
       [closedCategories, space.roomId]
+    )
+  );
+
+  const navRoomIds = useMemo(
+    () =>
+      hierarchy
+        .map(({ roomId }) => roomId)
+        .filter((roomId) => mx.getRoom(roomId)?.isSpaceRoom() === false),
+    [mx, hierarchy]
+  );
+  usePublishNavRoomList(
+    navRoomIds,
+    selectedRoomId,
+    useCallback(
+      (roomId) => getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId)),
+      [mx, spaceIdOrAlias]
     )
   );
 

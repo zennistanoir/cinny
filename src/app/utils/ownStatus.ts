@@ -21,6 +21,25 @@ const toOwnStatus = (value: unknown): OwnStatus | undefined =>
     ? value
     : undefined;
 
+const toMinutes = (time: string): number | undefined => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(time);
+  if (!match) return undefined;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+/**
+ * Whether `now` falls between `start` and `end` ("HH:MM", local time). The range wraps
+ * past midnight when `end` is earlier than `start`, so 22:00-08:00 covers the night.
+ */
+export const isInQuietHours = (now: Date, start: string, end: string): boolean => {
+  const from = toMinutes(start);
+  const to = toMinutes(end);
+  if (from === undefined || to === undefined || from === to) return false;
+  const minute = now.getHours() * 60 + now.getMinutes();
+  if (from < to) return minute >= from && minute < to;
+  return minute >= from || minute < to;
+};
+
 export const getOwnStatus = (userId: string): OwnStatus =>
   toOwnStatus(localStorage.getItem(storageKey(userId))) ?? 'online';
 

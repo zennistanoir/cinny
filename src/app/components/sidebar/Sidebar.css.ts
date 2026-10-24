@@ -8,7 +8,6 @@ export const Sidebar = style([
   {
     width: toRem(66),
     backgroundColor: color.Background.Container,
-    borderRight: `${config.borderWidth.B300} solid ${color.Background.ContainerLine}`,
 
     display: 'flex',
     flexDirection: 'column',
@@ -175,7 +174,7 @@ export const SidebarAvatar = recipe({
     },
     outlined: {
       true: {
-        border: `${config.borderWidth.B300} solid ${color.Background.ContainerLine}`,
+        backgroundColor: color.SurfaceVariant.Container,
       },
     },
   },
@@ -187,14 +186,13 @@ export type SidebarAvatarVariants = RecipeVariants<typeof SidebarAvatar>;
 
 export const SidebarFolder = recipe({
   base: [
-    ContainerColor({ variant: 'Background' }),
+    ContainerColor({ variant: 'SurfaceVariant' }),
     {
       padding: config.space.S100,
       width: toRem(42),
       minHeight: toRem(42),
       display: 'flex',
       flexWrap: 'wrap',
-      outline: `${config.borderWidth.B300} solid ${color.Background.ContainerLine}`,
       position: 'relative',
 
       selectors: {

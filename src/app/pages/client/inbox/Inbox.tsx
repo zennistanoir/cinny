@@ -1,5 +1,5 @@
 import React from 'react';
-import { Avatar, Box, Icon, Icons, Text } from 'folds';
+import { Avatar, Box, Icon, IconButton, Icons, Text, Tooltip, TooltipProvider } from 'folds';
 import { useAtomValue } from 'jotai';
 import { NavCategory, NavItem, NavItemContent, NavLink } from '../../../components/nav';
 import { getInboxInvitesPath, getInboxNotificationsPath } from '../../pathUtils';
@@ -12,6 +12,45 @@ import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { PageNavFooter } from '../../../components/page-nav-footer';
+import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
+import { markAllAsRead } from '../../../utils/markAllAsRead';
+
+function MarkAllAsReadButton() {
+  const mx = useMatrixClient();
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const hasUnread = roomToUnread.size > 0;
+
+  return (
+    <TooltipProvider
+      position="Bottom"
+      align="End"
+      offset={4}
+      tooltip={
+        <Tooltip>
+          <Text>Mark All as Read</Text>
+        </Tooltip>
+      }
+    >
+      {(triggerRef) => (
+        <IconButton
+          ref={triggerRef}
+          size="300"
+          radii="300"
+          variant="Background"
+          aria-label="Mark All as Read"
+          aria-disabled={!hasUnread}
+          onClick={() => hasUnread && markAllAsRead(mx, roomToUnread, hideActivity)}
+        >
+          <Icon size="100" src={Icons.CheckTwice} />
+        </IconButton>
+      )}
+    </TooltipProvider>
+  );
+}
 
 function InvitesNavItem() {
   const invitesSelected = useInboxInvitesSelected();
@@ -57,6 +96,7 @@ export function Inbox() {
               Inbox
             </Text>
           </Box>
+          <MarkAllAsReadButton />
         </Box>
       </PageNavHeader>
 

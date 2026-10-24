@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -44,6 +51,7 @@ import {
   useHomeSearchSelected,
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
+import { usePublishNavRoomList } from '../../../state/navRoomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -221,6 +229,12 @@ export function Home() {
     }
     return items;
   }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
+
+  usePublishNavRoomList(
+    sortedRooms,
+    selectedRoomId,
+    useCallback((roomId) => getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId)), [mx])
+  );
 
   const virtualizer = useVirtualizer({
     count: sortedRooms.length,

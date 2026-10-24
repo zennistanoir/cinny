@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useAtom } from 'jotai';
 import {
   Avatar,
   Box,
@@ -28,16 +29,8 @@ import { Settings } from '../../features/settings';
 import { Modal500 } from '../Modal500';
 import { useCallEmbed } from '../../hooks/useCallEmbed';
 import { useCallControlState } from '../../plugins/call';
-import {
-  applyOwnStatus,
-  DND_STATUS_MSG,
-  getOwnStatus,
-  getSharedStatus,
-  OwnStatus,
-  shareOwnStatus,
-} from '../../utils/ownStatus';
-import { useAccountDataCallback } from '../../hooks/useAccountDataCallback';
-import { AccountDataEvent } from '../../../types/matrix/accountData';
+import { applyOwnStatus, DND_STATUS_MSG, OwnStatus, shareOwnStatus } from '../../utils/ownStatus';
+import { ownStatusAtom } from '../../state/ownStatus';
 import * as css from './ProfileCard.css';
 
 const STATUS_OPTIONS: Array<{
@@ -64,7 +57,7 @@ export function ProfileCard() {
   const userId = mx.getUserId()!;
   const profile = useUserProfile(userId);
   // The badge follows the picked status rather than the server's echo, which lags.
-  const [status, setStatus] = useState<OwnStatus>(() => getOwnStatus(userId));
+  const [status, setStatus] = useAtom(ownStatusAtom);
 
   const [statusAnchor, setStatusAnchor] = useState<RectCords>();
   const [settings, setSettings] = useState(false);
@@ -105,24 +98,6 @@ export function ProfileCard() {
       // The pick is stored and sent with every sync, so a failed update catches up.
     }
   };
-
-  // Follow a status picked on another Zennith client.
-  const followShared = useCallback(() => {
-    const shared = getSharedStatus(mx);
-    if (!shared || shared === getOwnStatus(userId)) return;
-    setStatus(shared);
-    applyOwnStatus(mx, shared).catch(() => undefined);
-  }, [mx, userId]);
-  useEffect(followShared, [followShared]);
-  useAccountDataCallback(
-    mx,
-    useCallback(
-      (evt) => {
-        if (evt.getType() === AccountDataEvent.ZennithStatus) followShared();
-      },
-      [followShared]
-    )
-  );
 
   return (
     <div className={css.ProfileCard}>

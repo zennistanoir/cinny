@@ -48,6 +48,9 @@ export interface Settings {
 
   showNotifications: boolean;
   isNotificationSounds: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
 
   hour24Clock: boolean;
   dateFormatString: string;
@@ -112,6 +115,9 @@ const defaultSettings: Settings = {
 
   showNotifications: true,
   isNotificationSounds: true,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '08:00',
 
   hour24Clock: false,
   dateFormatString: 'D MMM YYYY',

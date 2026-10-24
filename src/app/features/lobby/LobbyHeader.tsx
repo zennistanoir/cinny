@@ -158,7 +158,7 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
   };
 
   return (
-    <PageHeader className={showProfile ? undefined : css.Header} balance>
+    <PageHeader className={showProfile ? css.HeaderShadow : css.Header} balance>
       <Box grow="Yes" alignItems="Center" gap="200">
         {screenSize === ScreenSize.Mobile ? (
           <>

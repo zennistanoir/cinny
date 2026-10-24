@@ -1,12 +1,76 @@
 import React, { KeyboardEventHandler, useState } from 'react';
-import { Box, Icon, IconButton, Icons, Scroll, Switch, Text, color, toRem } from 'folds';
+import { Box, Button, Icon, IconButton, Icons, Scroll, Switch, Text, color, toRem } from 'folds';
+import { useSetAtom } from 'jotai';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { shortcutsModalAtom } from '../../../state/shortcutsModal';
 import { SequenceCardStyle } from '../styles.css';
 import { DesktopHotkeysSetting } from '../../../plugins/desktop';
+
+type NavRow = { label: string; keys: string };
+const NAV_ROWS: NavRow[] = [
+  { label: 'Search rooms', keys: 'Ctrl + K' },
+  { label: 'Previous room', keys: 'Alt + ↑' },
+  { label: 'Next room', keys: 'Alt + ↓' },
+  { label: 'Previous unread room', keys: 'Alt + Shift + ↑' },
+  { label: 'Next unread room', keys: 'Alt + Shift + ↓' },
+  { label: 'Mark current room as read', keys: 'Esc' },
+  { label: 'Mark all rooms as read', keys: 'Shift + Esc' },
+  { label: 'Show keyboard shortcuts', keys: 'Ctrl + /' },
+];
+
+function NavigationShortcutsSection() {
+  const openShortcuts = useSetAtom(shortcutsModalAtom);
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Navigation Shortcuts</Text>
+      <Text size="T300" priority="300">
+        Built-in shortcuts for moving between rooms and clearing unread badges.
+      </Text>
+      <Box direction="Column" gap="200">
+        {NAV_ROWS.map((row) => (
+          <SequenceCard
+            key={row.label}
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+          >
+            <SettingTile
+              title={row.label}
+              after={
+                <Box
+                  alignItems="Center"
+                  justifyContent="Center"
+                  style={{
+                    minWidth: toRem(160),
+                    height: toRem(36),
+                    padding: `0 ${toRem(12)}`,
+                    borderRadius: toRem(8),
+                    border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+                  }}
+                >
+                  <Text size="T300" priority="400">
+                    {row.keys}
+                  </Text>
+                </Box>
+              }
+            />
+          </SequenceCard>
+        ))}
+        <Box>
+          <Button variant="Secondary" size="300" radii="300" onClick={() => openShortcuts(true)}>
+            <Text as="span" size="B300">
+              View all shortcuts
+            </Text>
+          </Button>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
 
 type KeybindsProps = {
   requestClose: () => void;
@@ -28,7 +92,7 @@ function eventToHotkeyString(evt: React.KeyboardEvent): string | null {
   return parts.join('+');
 }
 
-function hotkeyStorageToDisplay(raw: string): string {
+export function hotkeyStorageToDisplay(raw: string): string {
   if (!raw) return '';
   return raw
     .split('+')
@@ -160,7 +224,9 @@ function KeybindInput({
               }}
             >
               <Text size="T300" priority={recording ? '400' : '300'}>
-                {recording ? 'Press keys...' : hotkeyStorageToDisplay(currentValue) || 'Click to record...'}
+                {recording
+                  ? 'Press keys...'
+                  : hotkeyStorageToDisplay(currentValue) || 'Click to record...'}
               </Text>
             </Box>
           </Box>
@@ -194,7 +260,8 @@ export function Keybinds({ requestClose }: KeybindsProps) {
               <Box direction="Column" gap="100">
                 <Text size="L400">Call Keybinds</Text>
                 <Text size="T300" priority="300">
-                  Click a keybind box, then press your desired key combination to record it. Press Escape to cancel, Enter to save.
+                  Click a keybind box, then press your desired key combination to record it. Press
+                  Escape to cancel, Enter to save.
                 </Text>
                 <Box direction="Column" gap="200">
                   <KeybindInput
@@ -220,6 +287,7 @@ export function Keybinds({ requestClose }: KeybindsProps) {
                   <DesktopHotkeysSetting />
                 </Box>
               </Box>
+              <NavigationShortcutsSection />
             </Box>
           </PageContent>
         </Scroll>

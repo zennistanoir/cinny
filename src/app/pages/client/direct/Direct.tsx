@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -30,6 +37,7 @@ import {
   NavItemContent,
 } from '../../../components/nav';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
+import { usePublishNavRoomList } from '../../../state/navRoomList';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
@@ -191,6 +199,12 @@ export function Direct() {
     }
     return items;
   }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
+
+  usePublishNavRoomList(
+    sortedDirects,
+    selectedRoomId,
+    useCallback((roomId) => getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId)), [mx])
+  );
 
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,

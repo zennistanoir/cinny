@@ -54,18 +54,34 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchEntry[] = [
   },
   { title: 'Start on Login', page: P.General, keywords: 'autostart boot startup', desktop: true },
 
-  { title: 'Reduced Motion', page: P.Accessibility, keywords: 'animation motion sickness vestibular' },
+  {
+    title: 'Reduced Motion',
+    page: P.Accessibility,
+    keywords: 'animation motion sickness vestibular',
+  },
   { title: 'High Contrast', page: P.Accessibility, keywords: 'contrast low vision text borders' },
-  { title: 'Always Show Focus Rings', page: P.Accessibility, keywords: 'keyboard focus outline tab' },
+  {
+    title: 'Always Show Focus Rings',
+    page: P.Accessibility,
+    keywords: 'keyboard focus outline tab',
+  },
   { title: 'Underline Links', page: P.Accessibility, keywords: 'links color blind' },
   { title: 'Monochrome Mode', page: P.Accessibility, keywords: 'grayscale colors' },
   { title: 'Page Zoom', page: P.Accessibility, keywords: 'scale size font bigger smaller' },
   { title: 'Message Text Size', page: P.Accessibility, keywords: 'font size bigger text' },
   { title: 'Line Spacing', page: P.Accessibility, keywords: 'line height readability dyslexia' },
   { title: 'Larger Emoji', page: P.Accessibility, keywords: 'emoji size bigger' },
-  { title: 'Readable Font', page: P.Accessibility, keywords: 'atkinson hyperlegible dyslexia font' },
+  {
+    title: 'Readable Font',
+    page: P.Accessibility,
+    keywords: 'atkinson hyperlegible dyslexia font',
+  },
   { title: 'Pause Animated Media', page: P.Accessibility, keywords: 'gif animation autoplay stop' },
-  { title: 'Visual Call Cues', page: P.Accessibility, keywords: 'deaf hearing captions sounds call' },
+  {
+    title: 'Visual Call Cues',
+    page: P.Accessibility,
+    keywords: 'deaf hearing captions sounds call',
+  },
   {
     title: 'Always Show Hover Controls',
     page: P.Accessibility,
@@ -96,6 +112,11 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchEntry[] = [
 
   { title: 'Desktop Notifications', page: P.Notifications, keywords: 'alerts popup' },
   { title: 'Notification Sound', page: P.Notifications, keywords: 'alert ping' },
+  {
+    title: 'Quiet Hours',
+    page: P.Notifications,
+    keywords: 'do not disturb dnd night schedule mute',
+  },
   { title: 'Email Notification', page: P.Notifications, keywords: 'mail' },
   { title: '1-to-1 Chats', page: P.Notifications, keywords: 'direct messages dm' },
   { title: 'Rooms', page: P.Notifications, keywords: 'group' },

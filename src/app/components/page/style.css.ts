@@ -51,7 +51,7 @@ export const PageNavHeader = recipe({
     },
   },
   defaultVariants: {
-    outlined: true,
+    outlined: false,
   },
 });
 export type PageNavHeaderVariants = RecipeVariants<typeof PageNavHeader>;
@@ -81,7 +81,7 @@ export const PageHeader = recipe({
     },
   },
   defaultVariants: {
-    outlined: true,
+    outlined: false,
   },
 });
 export type PageHeaderVariants = RecipeVariants<typeof PageHeader>;
