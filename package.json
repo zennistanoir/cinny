@@ -1,6 +1,6 @@
 {
   "name": "zennith",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Zenn's Forked Cinny Client",
   "main": "index.js",
   "type": "module",

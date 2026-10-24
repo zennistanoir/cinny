@@ -8,6 +8,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.11',
+    items: [
+      'Fixed a crash when opening the soundboard in a space with no sounds, or while every sound was unavailable.',
+    ],
+  },
+  {
     version: '0.1.10',
     items: [
       'Voice channels show a muted or deafened icon next to people, in the room list and on their call tile.',

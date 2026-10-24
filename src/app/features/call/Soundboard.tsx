@@ -1,4 +1,4 @@
-import React, { MouseEvent, useState } from 'react';
+import React, { MouseEvent, useRef, useState } from 'react';
 import { Room } from 'matrix-js-sdk';
 import {
   Box,
@@ -133,6 +133,9 @@ type SoundboardButtonProps = SoundboardPanelProps & {
 };
 export function SoundboardButton({ small, disabled, ...panel }: SoundboardButtonProps) {
   const [cords, setCords] = useState<RectCords>();
+  // With no sounds, or every sound disabled, the panel has nothing to tab to and
+  // focus-trap throws on activation; the menu itself is the fallback.
+  const menuRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
@@ -174,12 +177,13 @@ export function SoundboardButton({ small, disabled, ...panel }: SoundboardButton
           <FocusTrap
             focusTrapOptions={{
               initialFocus: false,
+              fallbackFocus: () => menuRef.current ?? document.body,
               onDeactivate: () => setCords(undefined),
               clickOutsideDeactivates: true,
               escapeDeactivates: stopPropagation,
             }}
           >
-            <Menu>
+            <Menu ref={menuRef} tabIndex={-1}>
               <SoundboardPanel {...panel} />
             </Menu>
           </FocusTrap>
