@@ -27,6 +27,8 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { DesktopIntegration, setUnreadBadge } from '../../plugins/desktop';
+import { WebUpdatePrompt } from '../../components/update-toast/WebUpdatePrompt';
+import { WhatsNew } from '../../features/whats-new/WhatsNew';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -270,6 +272,8 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <InviteNotifications />
       <MessageNotifications />
       <DesktopIntegration />
+      <WebUpdatePrompt />
+      <WhatsNew />
       {children}
     </>
   );

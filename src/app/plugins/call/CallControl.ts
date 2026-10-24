@@ -6,6 +6,20 @@ import { ElementMediaStateDetail, ElementMediaStatePayload, ElementWidgetActions
 // Set on the call iframe's <html> while a stream is maximized.
 const MAXIMIZED_ATTR = 'data-zennith-maximized';
 
+// Polls until `get` returns a value or the timeout passes.
+const waitFor = async <T>(get: () => T | undefined, timeoutMs = 1500): Promise<T | undefined> => {
+  const start = Date.now();
+  let value = get();
+  while (value === undefined && Date.now() - start < timeoutMs) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    value = get();
+  }
+  return value;
+};
+
 export enum CallControlEvent {
   StateUpdate = 'state_update',
 }
@@ -147,7 +161,7 @@ export class CallControl extends EventEmitter implements CallControlState {
     });
     this.onBodyMutation();
   }
-  
+
   private onBodyMutation() {
     if (!this.document) return;
 
@@ -261,7 +275,7 @@ export class CallControl extends EventEmitter implements CallControlState {
 
   private async setMediaState(state: ElementMediaStatePayload) {
     const data = await this.call.transport.send(ElementWidgetActions.DeviceMute, state);
-    return new Promise<typeof data>(resolve => {
+    return new Promise<typeof data>((resolve) => {
       if (this.mediaStatePromiseResolver) {
         this.mediaStatePromiseResolver();
       }
@@ -421,19 +435,6 @@ export class CallControl extends EventEmitter implements CallControlState {
 
   private maximizeCloseHandler: (() => void) | undefined;
 
-  private async waitFor<T>(get: () => T | undefined, timeoutMs = 1500): Promise<T | undefined> {
-    const start = Date.now();
-    let value = get();
-    while (value === undefined && Date.now() - start < timeoutMs) {
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((resolve) => {
-        setTimeout(resolve, 50);
-      });
-      value = get();
-    }
-    return value;
-  }
-
   /**
    * Show the spotlight (screen share) tile as large as possible: switch to
    * spotlight view (the expand toggle only exists there), expand the tile inside
@@ -446,7 +447,7 @@ export class CallControl extends EventEmitter implements CallControlState {
     const wasGrid = !this.spotlight;
     if (wasGrid) this.spotlightButton?.click();
 
-    const expandBtn = await this.waitFor(() => this.spotlightExpandButton);
+    const expandBtn = await waitFor(() => this.spotlightExpandButton);
     const wasExpanded = expandBtn?.getAttribute('aria-label') === 'Collapse';
     if (expandBtn && !wasExpanded) expandBtn.click();
 

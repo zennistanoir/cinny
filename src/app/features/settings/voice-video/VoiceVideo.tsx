@@ -1,7 +1,8 @@
-import React, { MouseEventHandler, useCallback, useEffect, useState } from 'react';
+import React, { MouseEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
+  color,
   config,
   Icon,
   IconButton,
@@ -13,6 +14,7 @@ import {
   Scroll,
   Switch,
   Text,
+  toRem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { Page, PageContent, PageHeader } from '../../../components/page';
@@ -23,6 +25,8 @@ import { settingsAtom, VoiceGateLevel } from '../../../state/settings';
 import { stopPropagation } from '../../../utils/keyboard';
 import { DesktopCallDuckingSetting } from '../../../plugins/desktop';
 import { SHARE_CONTENT_OPTIONS, SHARE_QUALITY_OPTIONS } from '../../call/ScreenSharePanel';
+import { GATE_LEVELS } from '../../../plugins/call/noiseSuppression';
+import { playToggleSound } from '../../../plugins/call/toggleSounds';
 import { SequenceCardStyle } from '../styles.css';
 
 type DeviceKind = 'audioinput' | 'audiooutput' | 'videoinput';
@@ -281,7 +285,12 @@ function Devices() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Devices</Text>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
         {needsAccess && (
           <SettingTile
             title="Device Access"
@@ -302,7 +311,20 @@ function Devices() {
           <SettingTile
             title="Output Device"
             description="Speakers or headset used for call audio."
-            after={<DeviceSelect kind="audiooutput" devices={devices} />}
+            after={
+              <Box gap="200" alignItems="Center">
+                <Button
+                  size="300"
+                  variant="Secondary"
+                  fill="Soft"
+                  radii="300"
+                  onClick={() => playToggleSound('speakerTest')}
+                >
+                  <Text size="B300">Test</Text>
+                </Button>
+                <DeviceSelect kind="audiooutput" devices={devices} />
+              </Box>
+            }
           />
         )}
         <SettingTile
@@ -312,8 +334,144 @@ function Devices() {
         />
       </SequenceCard>
       <Text size="T200" priority="300">
-        Applies the next time you join a call. During a call, use the call&apos;s own settings.
+        Applies from your next call. Mid-call, change devices in the call itself.
       </Text>
+    </Box>
+  );
+}
+
+// Meter range in dBFS. Speech usually sits between -40 and -15.
+const METER_FLOOR_DB = -80;
+const toMeterPercent = (db: number) =>
+  Math.min(100, Math.max(0, ((db - METER_FLOOR_DB) / -METER_FLOOR_DB) * 100));
+
+// Live level of the selected mic, with a marker where Voice Gate opens. It reads
+// the raw mic, before noise suppression, so background noise shows a little higher
+// here than the gate sees it.
+function MicTest({ voiceGate }: { voiceGate: VoiceGateLevel }) {
+  const [state, setState] = useState<'idle' | 'starting' | 'running' | 'failed'>('idle');
+  const fillRef = useRef<HTMLDivElement>(null);
+  const running = state === 'running' || state === 'starting';
+
+  useEffect(() => {
+    if (!running) return undefined;
+    let disposed = false;
+    let stream: MediaStream | undefined;
+    let audio: AudioContext | undefined;
+    let frame = 0;
+
+    const start = async () => {
+      const deviceId = readDevice('audioinput');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        });
+      } catch {
+        // The saved device may be gone; try the default before giving up.
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      if (disposed) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      audio = new AudioContext();
+      const analyser = audio.createAnalyser();
+      analyser.fftSize = 2048;
+      audio.createMediaStreamSource(stream).connect(analyser);
+      const samples = new Float32Array(analyser.fftSize);
+      let level = METER_FLOOR_DB;
+      setState('running');
+
+      const tick = () => {
+        analyser.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+        const db = 20 * Math.log10(Math.sqrt(sum / samples.length) || 1e-8);
+        // Rise instantly, fall smoothly, like a VU meter.
+        level = db > level ? db : level + (db - level) * 0.15;
+        if (fillRef.current) fillRef.current.style.width = `${toMeterPercent(level)}%`;
+        frame = requestAnimationFrame(tick);
+      };
+      tick();
+    };
+
+    start().catch(() => {
+      if (!disposed) setState('failed');
+    });
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+      audio?.close().catch(() => undefined);
+    };
+  }, [running]);
+
+  const gateOpen = voiceGate === 'off' ? undefined : GATE_LEVELS[voiceGate].open;
+
+  return (
+    <Box direction="Column" gap="300">
+      <SettingTile
+        title="Mic Test"
+        description={
+          state === 'failed'
+            ? "Couldn't open your microphone. Check that Zennith has permission to use it."
+            : 'Speak to check your input level.'
+        }
+        after={
+          <Button
+            size="300"
+            variant={running ? 'Critical' : 'Secondary'}
+            fill="Soft"
+            radii="300"
+            onClick={() => setState(running ? 'idle' : 'starting')}
+          >
+            <Text size="B300">{running ? 'Stop' : 'Test'}</Text>
+          </Button>
+        }
+      />
+      {state === 'running' && (
+        <Box direction="Column" gap="100">
+          <div
+            aria-hidden
+            style={{
+              position: 'relative',
+              height: toRem(8),
+              borderRadius: config.radii.Pill,
+              background: color.SurfaceVariant.ContainerLine,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              ref={fillRef}
+              style={{
+                width: 0,
+                height: '100%',
+                borderRadius: config.radii.Pill,
+                background: color.Success.Main,
+              }}
+            />
+            {gateOpen !== undefined && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: `${toMeterPercent(gateOpen)}%`,
+                  width: toRem(2),
+                  background: color.Warning.Main,
+                }}
+              />
+            )}
+          </div>
+          {gateOpen !== undefined && (
+            <Text size="T200" priority="300">
+              The yellow marker is where Voice Gate lets your mic through. When you&apos;re quiet,
+              the bar should stay left of it.
+            </Text>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -325,21 +483,27 @@ function Microphone() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Microphone</Text>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
         <SettingTile
           title="Noise Suppression"
-          description="Filter background noise from your microphone in calls (RNNoise). Applies immediately, including during a call."
+          description="Filters background noise from your mic. Works mid-call."
           after={
             <Switch variant="Primary" value={noiseSuppression} onChange={setNoiseSuppression} />
           }
         />
         <SettingTile
           title="Voice Gate"
-          description="Silence your microphone between words, cutting keyboard clicks and hum that noise suppression lets through. Higher levels need you to speak louder. Applies immediately."
+          description="Mutes your mic between words to cut keyboard clicks and hum. Higher levels need louder speech."
           after={
             <OptionSelect value={voiceGate} options={VOICE_GATE_OPTIONS} onChange={setVoiceGate} />
           }
         />
+        <MicTest voiceGate={voiceGate} />
       </SequenceCard>
     </Box>
   );
@@ -353,24 +517,29 @@ function ScreenShare() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Screen Share</Text>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
         <SettingTile
           title="Quality"
-          description="Resolution and frame rate of your screen share. Higher settings need more upload bandwidth."
+          description="Higher settings need more upload bandwidth."
           after={
             <OptionSelect value={quality} options={SHARE_QUALITY_OPTIONS} onChange={setQuality} />
           }
         />
         <SettingTile
           title="Optimize For"
-          description="Smooth motion keeps the frame rate up on a slow connection (games, video). Sharp text keeps the picture crisp instead (code, documents)."
+          description="Smooth motion for games and video, sharp text for code and documents."
           after={
             <OptionSelect value={content} options={SHARE_CONTENT_OPTIONS} onChange={setContent} />
           }
         />
         <SettingTile
           title="Hardware Encoding (H.264)"
-          description="Encode your screen share with H.264, which most GPUs encode in hardware. Lowers CPU use; turn off if viewers see a black or frozen share."
+          description="Uses your GPU to lower CPU load. Turn off if viewers see a black or frozen screen."
           after={<Switch variant="Primary" value={h264} onChange={setH264} />}
         />
       </SequenceCard>
@@ -387,10 +556,15 @@ function Sounds() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Sounds</Text>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
         <SettingTile
           title="Toggle Sounds"
-          description="Play a short sound when you mute, deafen or toggle noise suppression (including via keybinds), and when a screen share ends."
+          description="Play a sound when you mute, deafen or toggle noise suppression, and when a share ends."
           after={
             <Switch variant="Primary" value={callToggleSounds} onChange={setCallToggleSounds} />
           }

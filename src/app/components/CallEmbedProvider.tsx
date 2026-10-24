@@ -26,6 +26,7 @@ import {
 } from 'matrix-js-sdk';
 import { IRTCNotificationContent, RTCNotificationType } from 'matrix-js-sdk/lib/matrixrtc/types';
 import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
+import { isKeyHotkey } from 'is-hotkey';
 import {
   CallEmbedContextProvider,
   CallEmbedRefContextProvider,
@@ -56,7 +57,6 @@ import { getRoomPermissionsAPI } from '../hooks/useRoomPermissions';
 import { useLivekitSupport } from '../hooks/useLivekitSupport';
 import { CallAvatarAnimation } from '../styles/Animations.css';
 import { webRTCSupported } from '../utils/rtc';
-import { isKeyHotkey } from 'is-hotkey';
 import { useSetSetting, useSetting } from '../state/hooks/settings';
 import { settingsAtom } from '../state/settings';
 import '../plugins/call/iframeMedia';
@@ -175,6 +175,9 @@ function ScreenShareEndedSound({ embed }: { embed: CallEmbed }) {
   return null;
 }
 
+// Push to talk keeps the mic open briefly after release so the end of a word isn't cut.
+export const PTT_RELEASE_DELAY_MS = 200;
+
 function GlobalKeybindsListener() {
   const callEmbed = useAtomValue(callEmbedAtom);
   const [toggleMute] = useSetting(settingsAtom, 'keybindToggleMute');
@@ -185,6 +188,18 @@ function GlobalKeybindsListener() {
   const prevMicRef = useRef<boolean | null>(null);
 
   useEffect(() => {
+    let releaseTimer: number | undefined;
+    const releasePtt = () => {
+      window.clearTimeout(releaseTimer);
+      releaseTimer = undefined;
+      if (prevMicRef.current === null) return;
+      const wasMuted = !prevMicRef.current;
+      prevMicRef.current = null;
+      if (wasMuted && callEmbed?.control.microphone) {
+        callEmbed.control.toggleMicrophone();
+      }
+    };
+
     const handleKeyDown = (evt: KeyboardEvent) => {
       const target = evt.target as HTMLElement;
       if (
@@ -219,6 +234,9 @@ function GlobalKeybindsListener() {
       if (pushToTalk && isKeyHotkey(pushToTalk, evt)) {
         evt.preventDefault();
         evt.stopPropagation();
+        // Pressed again within the release delay: keep talking.
+        window.clearTimeout(releaseTimer);
+        releaseTimer = undefined;
         if (prevMicRef.current === null) {
           prevMicRef.current = callEmbed.control.microphone;
           if (!callEmbed.control.microphone) {
@@ -232,12 +250,8 @@ function GlobalKeybindsListener() {
       if (!callEmbed || !pushToTalk) return;
       if (isKeyHotkey(pushToTalk, evt)) {
         evt.stopPropagation();
-        if (prevMicRef.current !== null) {
-          const wasMuted = !prevMicRef.current;
-          prevMicRef.current = null;
-          if (wasMuted) {
-            callEmbed.control.toggleMicrophone();
-          }
+        if (prevMicRef.current !== null && releaseTimer === undefined) {
+          releaseTimer = window.setTimeout(releasePtt, PTT_RELEASE_DELAY_MS);
         }
       }
     };
@@ -277,8 +291,16 @@ function GlobalKeybindsListener() {
       window.removeEventListener('keyup', handleKeyUp);
       iframe?.removeEventListener('load', attachIframe);
       detachIframe();
+      releasePtt();
     };
-  }, [callEmbed, toggleMute, toggleDeafen, pushToTalk, toggleNoiseSuppression, setNoiseSuppression]);
+  }, [
+    callEmbed,
+    toggleMute,
+    toggleDeafen,
+    pushToTalk,
+    toggleNoiseSuppression,
+    setNoiseSuppression,
+  ]);
 
   return null;
 }

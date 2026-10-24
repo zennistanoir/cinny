@@ -17,7 +17,7 @@ import App from './app/pages/App';
 import './app/i18n';
 import { pushSessionToSW } from './sw-session';
 import { getFallbackSession } from './app/state/sessions';
-import { checkForZennithUpdates } from './util/updater';
+import { checkForZennithUpdates, installDeferredUpdate } from './util/updater';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -60,4 +60,22 @@ const mountApp = () => {
   root.render(<App />);
 };
 
-mountApp();
+const showInstallingScreen = () => {
+  const status = document.createElement('div');
+  status.textContent = 'Updating Zennith…';
+  status.style.cssText =
+    'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+    'font:500 16px Inter, sans-serif;color:#d0d0d0;background:#101010;z-index:10000';
+  document.body.appendChild(status);
+  return status;
+};
+
+// An update postponed with "Later" installs here, before the app loads.
+let installingScreen: HTMLElement | undefined;
+installDeferredUpdate(() => {
+  installingScreen = showInstallingScreen();
+}).then((installing) => {
+  if (installing) return;
+  installingScreen?.remove();
+  mountApp();
+});

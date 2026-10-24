@@ -26,7 +26,10 @@ const GATE_PROCESSOR_ID = '@sapphi-red/web-noise-suppressor/noise-gate';
 const SAMPLE_RATE = 48000;
 
 // Gate thresholds in dBFS (RMS per render quantum, measured after RNNoise).
-const GATE_LEVELS: Record<Exclude<VoiceGateLevel, 'off'>, { open: number; close: number }> = {
+export const GATE_LEVELS: Record<
+  Exclude<VoiceGateLevel, 'off'>,
+  { open: number; close: number }
+> = {
   low: { open: -60, close: -66 },
   medium: { open: -50, close: -56 },
   high: { open: -42, close: -48 },
@@ -106,6 +109,7 @@ export const setVoiceGate = (level: VoiceGateLevel) => {
 
 // Make the processed track look like the captured one to Element Call / LiveKit,
 // which read deviceId from getSettings() for device selection.
+/* eslint-disable no-param-reassign -- patching the track is the point */
 const mirrorTrack = (processed: MediaStreamTrack, src: MediaStreamTrack) => {
   Object.defineProperty(processed, 'label', { get: () => src.label });
   processed.getSettings = () => src.getSettings();
@@ -113,6 +117,7 @@ const mirrorTrack = (processed: MediaStreamTrack, src: MediaStreamTrack) => {
   processed.getCapabilities = () => src.getCapabilities();
   processed.applyConstraints = (c) => src.applyConstraints(c);
 };
+/* eslint-enable no-param-reassign */
 
 const processStream = async (win: Window, stream: MediaStream): Promise<MediaStream> => {
   const [src] = stream.getAudioTracks();

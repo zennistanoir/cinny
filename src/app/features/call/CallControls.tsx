@@ -94,7 +94,10 @@ export function CallControls({ callEmbed }: CallControlsProps) {
     setCords(undefined);
   };
 
-  const handleMicrophoneToggle = useCallback(() => callEmbed.control.toggleMicrophone(), [callEmbed]);
+  const handleMicrophoneToggle = useCallback(
+    () => callEmbed.control.toggleMicrophone(),
+    [callEmbed]
+  );
   const handleVideoToggle = useCallback(() => callEmbed.control.toggleVideo(), [callEmbed]);
 
   const [hangupState, hangup] = useAsyncCallback(
@@ -115,8 +118,12 @@ export function CallControls({ callEmbed }: CallControlsProps) {
         transition: 'opacity 0.3s ease, transform 0.3s ease',
         pointerEvents: visible ? 'auto' : 'none',
       }}
-      onMouseEnter={() => { hoveringRef.current = true; }}
-      onMouseLeave={() => { hoveringRef.current = false; }}
+      onMouseEnter={() => {
+        hoveringRef.current = true;
+      }}
+      onMouseLeave={() => {
+        hoveringRef.current = false;
+      }}
     >
       <SequenceCard
         className={css.ControlCard}
@@ -174,32 +181,17 @@ export function CallControls({ callEmbed }: CallControlsProps) {
             >
               <Menu>
                 <Box direction="Column" style={{ padding: config.space.S100 }}>
-                  <MenuItem
-                    size="300"
-                    variant="Surface"
-                    radii="300"
-                    onClick={handleSpotlightClick}
-                  >
+                  <MenuItem size="300" variant="Surface" radii="300" onClick={handleSpotlightClick}>
                     <Text size="B300" truncate>
                       {spotlight ? 'Grid View' : 'Spotlight View'}
                     </Text>
                   </MenuItem>
-                  <MenuItem
-                    size="300"
-                    variant="Surface"
-                    radii="300"
-                    onClick={handleMaximizeClick}
-                  >
+                  <MenuItem size="300" variant="Surface" radii="300" onClick={handleMaximizeClick}>
                     <Text size="B300" truncate>
                       Maximize Stream
                     </Text>
                   </MenuItem>
-                  <MenuItem
-                    size="300"
-                    variant="Surface"
-                    radii="300"
-                    onClick={handleReactionsClick}
-                  >
+                  <MenuItem size="300" variant="Surface" radii="300" onClick={handleReactionsClick}>
                     <Text size="B300" truncate>
                       Reactions
                     </Text>
@@ -215,12 +207,7 @@ export function CallControls({ callEmbed }: CallControlsProps) {
                       {noiseSuppression ? 'Noise Suppression: On' : 'Noise Suppression: Off'}
                     </Text>
                   </MenuItem>
-                  <MenuItem
-                    size="300"
-                    variant="Surface"
-                    radii="300"
-                    onClick={handleSettingsClick}
-                  >
+                  <MenuItem size="300" variant="Surface" radii="300" onClick={handleSettingsClick}>
                     <Text size="B300" truncate>
                       Settings
                     </Text>

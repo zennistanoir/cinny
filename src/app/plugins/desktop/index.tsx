@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { useAtomValue } from 'jotai';
-import { Box, Button, color, config, Spinner, Switch, Text, toRem } from 'folds';
+import { Box, Switch, Text } from 'folds';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
@@ -15,7 +15,14 @@ import { settingsAtom } from '../../state/settings';
 import { SequenceCard } from '../../components/sequence-card';
 import { SettingTile } from '../../components/setting-tile';
 import { SequenceCardStyle } from '../../features/settings/styles.css';
-import { getReadyUpdate, restartToUpdate, subscribeReadyUpdate } from '../../../util/updater';
+import { UpdateToast } from '../../components/update-toast/UpdateToast';
+import { PTT_RELEASE_DELAY_MS } from '../../components/CallEmbedProvider';
+import {
+  getReadyUpdate,
+  installOnNextLaunch,
+  restartToUpdate,
+  subscribeReadyUpdate,
+} from '../../../util/updater';
 
 // Desktop (Tauri) integration. The web build has a no-op copy of this module with the
 // same exports, so shared code can call into it unconditionally.
@@ -79,7 +86,10 @@ function GlobalCallHotkeys() {
     const { control } = callEmbed;
 
     let pttPrevMic: boolean | null = null;
+    let releaseTimer: number | undefined;
     const releasePtt = () => {
+      window.clearTimeout(releaseTimer);
+      releaseTimer = undefined;
       if (pttPrevMic === false && control.microphone) control.toggleMicrophone();
       pttPrevMic = null;
     };
@@ -91,7 +101,14 @@ function GlobalCallHotkeys() {
         toAccelerator(pushToTalk),
         (pressed) => {
           if (!pressed) {
-            releasePtt();
+            // Same short tail as the in-window keybind, so the last word isn't clipped.
+            if (pttPrevMic !== null && releaseTimer === undefined) {
+              releaseTimer = window.setTimeout(releasePtt, PTT_RELEASE_DELAY_MS);
+            }
+          } else if (releaseTimer !== undefined) {
+            // Pressed again before the tail ran out: keep talking.
+            window.clearTimeout(releaseTimer);
+            releaseTimer = undefined;
           } else if (pttPrevMic === null) {
             pttPrevMic = control.microphone;
             if (!pttPrevMic) control.toggleMicrophone();
@@ -103,10 +120,12 @@ function GlobalCallHotkeys() {
     let disposed = false;
     const registered: string[] = [];
     queueShortcuts(async () => {
+      const active = bindings.filter(
+        (binding): binding is [string, (pressed: boolean) => void] => !!binding[0]
+      );
       // eslint-disable-next-line no-restricted-syntax
-      for (const [accelerator, handler] of bindings) {
+      for (const [accelerator, handler] of active) {
         if (disposed) return;
-        if (!accelerator) continue;
         let held = false;
         try {
           // eslint-disable-next-line no-await-in-loop
@@ -148,7 +167,7 @@ function CloseToTraySync() {
 
 // --- Restart to update -----------------------------------------------------------------
 
-function UpdateToast() {
+function DesktopUpdateToast() {
   const update = useSyncExternalStore(subscribeReadyUpdate, getReadyUpdate);
   const [dismissed, setDismissed] = useState(false);
   const [restarting, setRestarting] = useState(false);
@@ -166,57 +185,25 @@ function UpdateToast() {
     });
   };
 
+  const handleLater = () => {
+    installOnNextLaunch();
+    setDismissed(true);
+  };
+
   return (
-    <Box
-      role="status"
-      aria-live="polite"
-      direction="Column"
-      gap="300"
-      style={{
-        position: 'fixed',
-        right: config.space.S400,
-        bottom: config.space.S400,
-        zIndex: 9999,
-        width: toRem(300),
-        padding: config.space.S400,
-        borderRadius: config.radii.R400,
-        background: color.Surface.Container,
-        color: color.Surface.OnContainer,
-        border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
-      }}
-    >
-      <Box direction="Column" gap="100">
-        <Text size="H6">Update ready</Text>
-        <Text size="T300" priority="300">
-          {failed
-            ? `Couldn't install Zennith ${update.version}. Try again, or restart later.`
-            : `Zennith ${update.version} has been downloaded. Restart to finish updating.`}
-        </Text>
-      </Box>
-      <Box gap="200" justifyContent="End">
-        <Button
-          size="300"
-          variant="Secondary"
-          fill="None"
-          radii="300"
-          disabled={restarting}
-          onClick={() => setDismissed(true)}
-        >
-          <Text size="B300">Later</Text>
-        </Button>
-        <Button
-          size="300"
-          variant="Primary"
-          radii="300"
-          disabled={restarting}
-          before={restarting ? <Spinner size="100" variant="Primary" fill="Solid" /> : undefined}
-          onClick={handleRestart}
-        >
-          <Text size="B300">{restarting ? 'Restarting…' : 'Restart'}</Text>
-        </Button>
-      </Box>
-    </Box>
+    <UpdateToast
+      title="Update available"
+      description={
+        failed
+          ? `Couldn't install Zennith ${update.version}. Try again, or pick Later to install it next time you open Zennith.`
+          : `Zennith ${update.version} is ready. Restart now, or it installs the next time you open Zennith.`
+      }
+      actionLabel="Restart now"
+      busyLabel="Restarting…"
+      busy={restarting}
+      onLater={handleLater}
+      onAction={handleRestart}
+    />
   );
 }
 
@@ -225,7 +212,7 @@ export function DesktopIntegration() {
     <>
       <GlobalCallHotkeys />
       <CloseToTraySync />
-      <UpdateToast />
+      <DesktopUpdateToast />
     </>
   );
 }
@@ -238,7 +225,7 @@ export function DesktopHotkeysSetting() {
     <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
       <SettingTile
         title="Work Outside Zennith"
-        description="Mute, deafen and push to talk keep working while another app is focused. The combination needs Ctrl or Alt, or a function key (F1–F24); plain keys only work inside Zennith so they don't block typing elsewhere."
+        description="Mute, deafen and push to talk work while other apps are focused. Needs Ctrl, Alt or an F-key, so normal typing isn't blocked."
         after={<Switch variant="Primary" value={globalHotkeys} onChange={setGlobalHotkeys} />}
       />
     </SequenceCard>
@@ -284,7 +271,7 @@ export function DesktopCallDuckingSetting() {
   return (
     <SettingTile
       title="Lower Other Apps During Calls"
-      description="Windows turns down music and games while you're in a call. Switch this off to keep them at full volume. This is Windows' own Communications setting, so it applies to other calling apps too."
+      description="Windows quiets music and games during calls. A system setting, so it affects other calling apps too."
       after={
         <Switch
           variant="Primary"
@@ -339,7 +326,7 @@ export function DesktopAppSettings() {
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Close to Tray"
-          description="Closing the window keeps Zennith running in the system tray, so calls and notifications continue. Quit from the tray icon."
+          description="Keep Zennith running in the tray when you close the window. Quit from the tray icon."
           after={<Switch variant="Primary" value={closeToTray} onChange={setCloseToTray} />}
         />
       </SequenceCard>
