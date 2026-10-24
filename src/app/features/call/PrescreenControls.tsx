@@ -21,11 +21,10 @@ export function PrescreenControls({ canJoin }: PrescreenControlsProps) {
   const startCall = useCallStart(direct);
   const joining = callEmbed?.roomId === room.roomId && !callJoined;
 
-  const disabled = inOtherCall || !canJoin;
+  const disabled = !canJoin;
 
   const { microphone, video, sound, toggleMicrophone, toggleVideo, toggleSound } =
     useCallPreferences();
-
 
   const handleMicrophoneToggle = useCallback(async () => toggleMicrophone(), [toggleMicrophone]);
   const handleVideoToggle = useCallback(async () => toggleVideo(), [toggleVideo]);
@@ -63,7 +62,7 @@ export function PrescreenControls({ canJoin }: PrescreenControlsProps) {
             )
           }
         >
-          <Text size="B400">Join</Text>
+          <Text size="B400">{inOtherCall ? 'Switch Here' : 'Join'}</Text>
         </Button>
       </Box>
     </SequenceCard>

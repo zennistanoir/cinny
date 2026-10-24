@@ -5,6 +5,39 @@
   font-display: swap;
 }
 
+/* Readable font option (Settings > Accessibility). SIL OFL 1.1, see public/font. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('../public/font/AtkinsonHyperlegible-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('../public/font/AtkinsonHyperlegible-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('../public/font/AtkinsonHyperlegible-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('../public/font/AtkinsonHyperlegible-BoldItalic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --tc-link: hsl(213deg 100% 45%);
 
@@ -141,14 +174,5 @@ li p::before {
   display: inline-block;
 }
 
-/* Respect the OS "reduce motion" setting (incoming-call wobble, pulses, transitions). */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
+/* Reduced motion (OS setting or Settings > Accessibility) lives in
+   app/styles/accessibility.css.ts so the user can override the OS. */

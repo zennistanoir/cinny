@@ -1,4 +1,4 @@
-import React, { ReactNode, useCallback, useEffect, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Badge,
   Box,
@@ -31,6 +31,8 @@ import { decryptFile, downloadEncryptedMedia, mxcUrlToHttp } from '../../../util
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { ModalWide } from '../../../styles/Modal.css';
 import { validBlurHash } from '../../../utils/blurHash';
+import { Image as ImageCss } from '../../media/media.css';
+import { useFreezeFrame } from '../../PausableImg';
 
 type RenderViewerProps = {
   src: string;
@@ -99,8 +101,15 @@ export const ImageContent = as<'div', ImageContentProps>(
       }, [mx, url, useAuthentication, mimeType, encInfo])
     );
 
+    const imageHostRef = useRef<HTMLDivElement>(null);
+    const freeze = useFreezeFrame(
+      useCallback(() => imageHostRef.current?.querySelector('img'), []),
+      mimeType === 'image/gif' || mimeType === 'image/webp'
+    );
+
     const handleLoad = () => {
       setLoad(true);
+      freeze.paint();
     };
     const handleError = () => {
       setLoad(false);
@@ -168,7 +177,14 @@ export const ImageContent = as<'div', ImageContentProps>(
           </Box>
         )}
         {srcState.status === AsyncStatus.Success && (
-          <Box className={classNames(css.AbsoluteContainer, blurred && css.Blur)}>
+          <Box
+            ref={imageHostRef}
+            className={classNames(
+              css.AbsoluteContainer,
+              blurred && css.Blur,
+              freeze.pause && 'zennith-freeze-host'
+            )}
+          >
             {renderImage({
               alt: body,
               title: body,
@@ -178,6 +194,14 @@ export const ImageContent = as<'div', ImageContentProps>(
               onClick: () => setViewer(true),
               tabIndex: 0,
             })}
+            {freeze.pause && (
+              <canvas
+                ref={freeze.canvasRef}
+                className={classNames(ImageCss, 'zennith-freeze')}
+                onClick={() => setViewer(true)}
+                aria-hidden
+              />
+            )}
           </Box>
         )}
         {blurred && !error && srcState.status !== AsyncStatus.Error && (

@@ -24,6 +24,7 @@ import {
   VideoButton,
 } from './Controls';
 import { ScreenSharePopOut } from './ScreenSharePanel';
+import { SoundboardButton } from './Soundboard';
 import { CallEmbed, useCallControlState } from '../../plugins/call';
 import { stopPropagation } from '../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -146,6 +147,7 @@ export function CallControls({ callEmbed }: CallControlsProps) {
           onToggle={() => callEmbed.control.toggleScreenshare()}
           onClose={() => setShareCords(undefined)}
         />
+        <SoundboardButton room={callEmbed.room} micEnabled={microphone} soundEnabled={sound} />
         <ChatButton />
         <Button
           variant="Critical"

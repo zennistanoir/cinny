@@ -17,6 +17,7 @@ import { CallEmbed, useCallControlState } from '../../plugins/call';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { callEmbedAtom } from '../../state/callEmbed';
 import { ScreenSharePopOut } from '../call/ScreenSharePanel';
+import { SoundboardButton } from '../call/Soundboard';
 
 type MicrophoneButtonProps = {
   enabled: boolean;
@@ -220,6 +221,15 @@ export function CallControl({
             enabled={screenshare}
             open={!!shareCords}
             onClick={(evt) => setShareCords(evt.currentTarget.getBoundingClientRect())}
+            disabled={!callJoined}
+          />
+        )}
+        {!compact && (
+          <SoundboardButton
+            small
+            room={callEmbed.room}
+            micEnabled={microphone}
+            soundEnabled={sound}
             disabled={!callJoined}
           />
         )}

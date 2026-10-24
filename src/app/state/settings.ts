@@ -12,6 +12,9 @@ export type MessageSpacing = '0' | '100' | '200' | '300' | '400' | '500';
 export type VoiceGateLevel = 'off' | 'low' | 'medium' | 'high';
 export type ScreenShareQuality = '720p30' | '1080p30' | '1080p60' | '1440p60';
 export type ScreenShareContent = 'motion' | 'detail';
+export type MotionPreference = 'system' | 'reduce' | 'allow';
+export type MessageTextSize = '100' | '115' | '130' | '150';
+export type LineSpacing = 'normal' | 'relaxed' | 'loose';
 export enum MessageLayout {
   Modern = 0,
   Compact = 1,
@@ -64,6 +67,19 @@ export interface Settings {
   screenShareContent: ScreenShareContent;
   screenShareH264: boolean;
 
+  // Accessibility.
+  reducedMotion: MotionPreference;
+  highContrast: boolean;
+  focusRings: boolean;
+  underlineLinks: boolean;
+  messageTextSize: MessageTextSize;
+  lineSpacing: LineSpacing;
+  largeEmoji: boolean;
+  readableFont: boolean;
+  pauseAnimatedMedia: boolean;
+  visualCallCues: boolean;
+  alwaysShowHoverControls: boolean;
+
   // Desktop app only.
   globalCallHotkeys: boolean;
   closeToTray: boolean;
@@ -114,6 +130,18 @@ const defaultSettings: Settings = {
   screenShareQuality: '1080p30',
   screenShareContent: 'motion',
   screenShareH264: false,
+
+  reducedMotion: 'system',
+  highContrast: false,
+  focusRings: false,
+  underlineLinks: false,
+  messageTextSize: '100',
+  lineSpacing: 'normal',
+  largeEmoji: false,
+  readableFont: false,
+  pauseAnimatedMedia: false,
+  visualCallCues: false,
+  alwaysShowHoverControls: false,
 
   globalCallHotkeys: true,
   closeToTray: true,

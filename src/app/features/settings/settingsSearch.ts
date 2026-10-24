@@ -5,6 +5,7 @@
 export enum SettingsSearchPage {
   General = 'General',
   VoiceVideo = 'Voice & Video',
+  Accessibility = 'Accessibility',
   Account = 'Account',
   Notifications = 'Notifications',
   Devices = 'Devices',
@@ -52,6 +53,24 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchEntry[] = [
     desktop: true,
   },
   { title: 'Start on Login', page: P.General, keywords: 'autostart boot startup', desktop: true },
+
+  { title: 'Reduced Motion', page: P.Accessibility, keywords: 'animation motion sickness vestibular' },
+  { title: 'High Contrast', page: P.Accessibility, keywords: 'contrast low vision text borders' },
+  { title: 'Always Show Focus Rings', page: P.Accessibility, keywords: 'keyboard focus outline tab' },
+  { title: 'Underline Links', page: P.Accessibility, keywords: 'links color blind' },
+  { title: 'Monochrome Mode', page: P.Accessibility, keywords: 'grayscale colors' },
+  { title: 'Page Zoom', page: P.Accessibility, keywords: 'scale size font bigger smaller' },
+  { title: 'Message Text Size', page: P.Accessibility, keywords: 'font size bigger text' },
+  { title: 'Line Spacing', page: P.Accessibility, keywords: 'line height readability dyslexia' },
+  { title: 'Larger Emoji', page: P.Accessibility, keywords: 'emoji size bigger' },
+  { title: 'Readable Font', page: P.Accessibility, keywords: 'atkinson hyperlegible dyslexia font' },
+  { title: 'Pause Animated Media', page: P.Accessibility, keywords: 'gif animation autoplay stop' },
+  { title: 'Visual Call Cues', page: P.Accessibility, keywords: 'deaf hearing captions sounds call' },
+  {
+    title: 'Always Show Hover Controls',
+    page: P.Accessibility,
+    keywords: 'buttons visible voice volume',
+  },
 
   { title: 'Input Device', page: P.VoiceVideo, keywords: 'microphone mic audio input' },
   { title: 'Output Device', page: P.VoiceVideo, keywords: 'speakers headset headphones audio' },

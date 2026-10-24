@@ -29,6 +29,8 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { DesktopIntegration, setUnreadBadge } from '../../plugins/desktop';
 import { WebUpdatePrompt } from '../../components/update-toast/WebUpdatePrompt';
 import { WhatsNew } from '../../features/whats-new/WhatsNew';
+import { ThemeKind, useTheme } from '../../hooks/useTheme';
+import '../../styles/accessibility.css';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -50,6 +52,61 @@ function PageZoomFeature() {
   } else {
     document.documentElement.style.setProperty('font-size', `calc(1em * ${pageZoom / 100})`);
   }
+
+  return null;
+}
+
+const LINE_SPACING = { normal: 1, relaxed: 1.2, loose: 1.45 } as const;
+
+// Settings > Accessibility: data attributes on <html> read by styles/accessibility.css.ts.
+function AccessibilityFeature() {
+  const theme = useTheme();
+  const [reducedMotion] = useSetting(settingsAtom, 'reducedMotion');
+  const [highContrast] = useSetting(settingsAtom, 'highContrast');
+  const [focusRings] = useSetting(settingsAtom, 'focusRings');
+  const [underlineLinks] = useSetting(settingsAtom, 'underlineLinks');
+  const [messageTextSize] = useSetting(settingsAtom, 'messageTextSize');
+  const [lineSpacing] = useSetting(settingsAtom, 'lineSpacing');
+  const [largeEmoji] = useSetting(settingsAtom, 'largeEmoji');
+  const [readableFont] = useSetting(settingsAtom, 'readableFont');
+  const [alwaysShowHoverControls] = useSetting(settingsAtom, 'alwaysShowHoverControls');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const setAttr = (name: string, value: string | false) => {
+      if (value === false) root.removeAttribute(name);
+      else root.setAttribute(name, value);
+    };
+
+    setAttr('data-motion', reducedMotion !== 'system' && reducedMotion);
+    setAttr('data-high-contrast', highContrast && (theme.kind === ThemeKind.Dark ? 'dark' : 'light'));
+    setAttr('data-focus-rings', focusRings && '');
+    setAttr('data-underline-links', underlineLinks && '');
+    setAttr('data-large-emoji', largeEmoji && '');
+    setAttr('data-readable-font', readableFont && '');
+    setAttr('data-hover-controls', alwaysShowHoverControls && '');
+
+    const customText = messageTextSize !== '100' || lineSpacing !== 'normal';
+    setAttr('data-message-text', customText && '');
+    if (customText) {
+      root.style.setProperty('--zennith-msg-scale', `${Number(messageTextSize) / 100}`);
+      root.style.setProperty('--zennith-msg-spacing', `${LINE_SPACING[lineSpacing]}`);
+    } else {
+      root.style.removeProperty('--zennith-msg-scale');
+      root.style.removeProperty('--zennith-msg-spacing');
+    }
+  }, [
+    theme.kind,
+    reducedMotion,
+    highContrast,
+    focusRings,
+    underlineLinks,
+    messageTextSize,
+    lineSpacing,
+    largeEmoji,
+    readableFont,
+    alwaysShowHoverControls,
+  ]);
 
   return null;
 }
@@ -268,6 +325,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
     <>
       <SystemEmojiFeature />
       <PageZoomFeature />
+      <AccessibilityFeature />
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />

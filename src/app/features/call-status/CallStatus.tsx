@@ -25,7 +25,7 @@ export function CallStatus({ callEmbed }: CallStatusProps) {
   const callMembers = useCallMembers(callSession);
   const screenSize = useScreenSize();
   const callJoined = useCallJoined(callEmbed);
-  const speakers = useCallSpeakers(callEmbed);
+  const speakers = useCallSpeakers();
 
   const compact = screenSize === ScreenSize.Mobile;
 

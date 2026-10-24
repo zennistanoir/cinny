@@ -15,6 +15,7 @@ import { useRoom } from '../../hooks/useRoom';
 import { EmojisStickers } from '../common-settings/emojis-stickers';
 import { Members } from '../common-settings/members';
 import { DeveloperTools } from '../common-settings/developer-tools';
+import { Soundboard } from '../common-settings/soundboard';
 import { General } from './general';
 import { Permissions } from './permissions';
 
@@ -46,6 +47,11 @@ const useSpaceSettingsMenuItems = (): SpaceSettingsMenuItem[] =>
         page: SpaceSettingsPage.EmojisStickersPage,
         name: 'Emojis & Stickers',
         icon: Icons.Smile,
+      },
+      {
+        page: SpaceSettingsPage.SoundboardPage,
+        name: 'Soundboard',
+        icon: Icons.VolumeHigh,
       },
       {
         page: SpaceSettingsPage.DeveloperToolsPage,
@@ -164,6 +170,9 @@ export function SpaceSettings({ initialPage, requestClose }: SpaceSettingsProps)
       )}
       {activePage === SpaceSettingsPage.EmojisStickersPage && (
         <EmojisStickers requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SpaceSettingsPage.SoundboardPage && (
+        <Soundboard requestClose={handlePageRequestClose} />
       )}
       {activePage === SpaceSettingsPage.DeveloperToolsPage && (
         <DeveloperTools requestClose={handlePageRequestClose} />

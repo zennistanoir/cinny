@@ -35,6 +35,7 @@ import { DeveloperTools } from './developer-tools';
 import { About } from './about';
 import { Keybinds } from './keybinds/Keybinds';
 import { VoiceVideo } from './voice-video';
+import { Accessibility } from './accessibility';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
@@ -50,6 +51,7 @@ export enum SettingsPages {
   KeybindsPage,
   AboutPage,
   VoiceVideoPage,
+  AccessibilityPage,
 }
 
 type SettingsMenuItem = {
@@ -70,6 +72,11 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         page: SettingsPages.VoiceVideoPage,
         name: 'Voice & Video',
         icon: Icons.Mic,
+      },
+      {
+        page: SettingsPages.AccessibilityPage,
+        name: 'Accessibility',
+        icon: Icons.Eye,
       },
       {
         page: SettingsPages.AccountPage,
@@ -113,6 +120,7 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
 const SEARCH_PAGES: Record<SettingsSearchPage, SettingsPages> = {
   [SettingsSearchPage.General]: SettingsPages.GeneralPage,
   [SettingsSearchPage.VoiceVideo]: SettingsPages.VoiceVideoPage,
+  [SettingsSearchPage.Accessibility]: SettingsPages.AccessibilityPage,
   [SettingsSearchPage.Account]: SettingsPages.AccountPage,
   [SettingsSearchPage.Notifications]: SettingsPages.NotificationPage,
   [SettingsSearchPage.Devices]: SettingsPages.DevicesPage,
@@ -349,6 +357,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
           )}
           {activePage === SettingsPages.VoiceVideoPage && (
             <VoiceVideo requestClose={handlePageRequestClose} />
+          )}
+          {activePage === SettingsPages.AccessibilityPage && (
+            <Accessibility requestClose={handlePageRequestClose} />
           )}
           {activePage === SettingsPages.AccountPage && (
             <Account requestClose={handlePageRequestClose} />

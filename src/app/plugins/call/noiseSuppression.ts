@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { loadRnnoise } from '@sapphi-red/web-noise-suppressor';
 import { getSettings, VoiceGateLevel } from '../../state/settings';
 
@@ -18,6 +19,10 @@ import { getSettings, VoiceGateLevel } from '../../state/settings';
 // (keyboard clacks, fans RNNoise lets through). It is rebuilt rather than bypassed
 // when its level changes: the gate worklet stops processing for good if it ever
 // sees a disconnected input.
+//
+// Everything reaches the destination through a pass-through `out` node, which also
+// feeds an analyser for the local speaking indicator. LiveKit's server-side speaker
+// detection samples every few hundred ms, so our own ring would lag behind our voice.
 
 const ASSET_BASE = `${import.meta.env.BASE_URL}public/rnnoise/`;
 // Processor name registered by rnnoiseWorklet.js (@sapphi-red/web-noise-suppressor 0.4.1).
@@ -36,15 +41,45 @@ export const GATE_LEVELS: Record<
 };
 const GATE_HOLD_MS = 300;
 
+// Local speaking indicator: RMS of the processed mic, checked every SPEAK_POLL_MS.
+const SPEAK_OPEN_DB = -50;
+const SPEAK_CLOSE_DB = -56;
+const SPEAK_HOLD_MS = 250;
+const SPEAK_POLL_MS = 40;
+
 type Pipeline = {
   source: MediaStreamAudioSourceNode;
   node: AudioWorkletNode;
+  out: GainNode;
   destination: MediaStreamAudioDestinationNode;
   makeGate: (level: VoiceGateLevel) => AudioWorkletNode | undefined;
   gate?: AudioWorkletNode;
+  speaking: boolean;
 };
 
 const pipelines = new Set<Pipeline>();
+
+// undefined = no processed mic (not in a call, or RNNoise fell back to the raw mic).
+let localSpeaking: boolean | undefined;
+const speakingListeners = new Set<() => void>();
+const updateLocalSpeaking = () => {
+  const next = pipelines.size === 0 ? undefined : [...pipelines].some((p) => p.speaking);
+  if (next === localSpeaking) return;
+  localSpeaking = next;
+  speakingListeners.forEach((l) => l());
+};
+const subscribeLocalSpeaking = (onChange: () => void) => {
+  speakingListeners.add(onChange);
+  return () => {
+    speakingListeners.delete(onChange);
+  };
+};
+export const useLocalSpeaking = (): boolean | undefined =>
+  useSyncExternalStore(subscribeLocalSpeaking, () => localSpeaking);
+// localSpeaking turns undefined exactly when the last pipeline goes away, so the
+// same listeners cover this.
+export const useMicPipelineReady = (): boolean =>
+  useSyncExternalStore(subscribeLocalSpeaking, () => pipelines.size > 0);
 let enabled = getSettings().noiseSuppression ?? true;
 let gateLevel: VoiceGateLevel = getSettings().voiceGate ?? 'off';
 let wasmBinary: Promise<ArrayBuffer> | undefined;
@@ -67,7 +102,7 @@ const getWasmBinary = (): Promise<ArrayBuffer> => {
 const route = (p: Pipeline) => {
   p.source.disconnect();
   p.node.disconnect();
-  const tail = p.gate ?? p.destination;
+  const tail = p.gate ?? p.out;
   if (enabled) {
     p.source.connect(p.node);
     p.node.connect(tail);
@@ -88,7 +123,7 @@ const rebuildGate = (p: Pipeline) => {
   destroyGate(p);
   const gate = p.makeGate(gateLevel);
   if (gate) {
-    gate.connect(p.destination);
+    gate.connect(p.out);
     // eslint-disable-next-line no-param-reassign
     p.gate = gate;
   }
@@ -105,6 +140,35 @@ export const setVoiceGate = (level: VoiceGateLevel) => {
   if (gateLevel === level) return;
   gateLevel = level;
   pipelines.forEach(rebuildGate);
+};
+
+// Soundboard: mixes a clip into every live mic pipeline. It joins at the
+// destination, after RNNoise and the gate so it isn't filtered, and past `out` so
+// it doesn't light our own speaking ring. Resolves to the clip length in seconds,
+// or undefined when there is no processed mic to mix into.
+export const playIntoMic = async (data: ArrayBuffer, volume: number): Promise<number | undefined> => {
+  const targets = [...pipelines];
+  if (targets.length === 0) return undefined;
+  const durations = await Promise.all(
+    targets.map(async ({ destination }) => {
+      const ctx = destination.context;
+      // decodeAudioData detaches its input, and every context needs its own copy.
+      const buffer = await ctx.decodeAudioData(data.slice(0));
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      source.connect(gain);
+      gain.connect(destination);
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
+      source.start();
+      return buffer.duration;
+    })
+  );
+  return Math.max(...durations);
 };
 
 // Make the processed track look like the captured one to Element Call / LiveKit,
@@ -138,6 +202,11 @@ const processStream = async (win: Window, stream: MediaStream): Promise<MediaStr
       processorOptions: { maxChannels: 1, wasmBinary: binary },
     });
     const destination = ctx.createMediaStreamDestination();
+    const out = ctx.createGain();
+    out.connect(destination);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    out.connect(analyser);
     const makeGate = (level: VoiceGateLevel) => {
       if (level === 'off' || !gateReady) return undefined;
       const { open, close } = GATE_LEVELS[level];
@@ -150,7 +219,7 @@ const processStream = async (win: Window, stream: MediaStream): Promise<MediaStr
         },
       });
     };
-    const pipeline: Pipeline = { source, node, destination, makeGate };
+    const pipeline: Pipeline = { source, node, out, destination, makeGate, speaking: false };
     rebuildGate(pipeline);
     pipelines.add(pipeline);
     if (ctx.state === 'suspended') ctx.resume().catch(() => undefined);
@@ -158,16 +227,34 @@ const processStream = async (win: Window, stream: MediaStream): Promise<MediaStr
     const [processed] = destination.stream.getAudioTracks();
     mirrorTrack(processed, src);
 
+    // LiveKit mutes by disabling the track it holds, so a muted mic never "speaks".
+    const samples = new Float32Array(analyser.fftSize);
+    let lastLoud = 0;
+    const poll = w.setInterval(() => {
+      analyser.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+      const db = 20 * Math.log10(Math.sqrt(sum / samples.length) || 1e-8);
+      const now = performance.now();
+      if (db >= (pipeline.speaking ? SPEAK_CLOSE_DB : SPEAK_OPEN_DB)) lastLoud = now;
+      pipeline.speaking = processed.enabled && now - lastLoud < SPEAK_HOLD_MS;
+      updateLocalSpeaking();
+    }, SPEAK_POLL_MS);
+    updateLocalSpeaking();
+
     let stopped = false;
     const teardown = () => {
       if (stopped) return;
       stopped = true;
+      w.clearInterval(poll);
       pipelines.delete(pipeline);
+      updateLocalSpeaking();
       src.stop();
       node.port.postMessage('destroy');
       destroyGate(pipeline);
       source.disconnect();
       node.disconnect();
+      out.disconnect();
       ctx.close().catch(() => undefined);
     };
     const nativeStop = processed.stop.bind(processed);

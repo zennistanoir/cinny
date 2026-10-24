@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useState } from 'react';
 
 // Inject voice-channel participant tree styles once globally.
 // Uses !important to override folds NavItem display:flex.
@@ -237,6 +237,14 @@ import { webRTCSupported } from '../../utils/rtc';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { setUserVolume, useCallPresence, useUserVolume } from '../../plugins/call/ecBridge';
+import { useCallSpeakers } from '../../hooks/useCallSpeakers';
+import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import {
+  CallModerationContent,
+  canModerateCall,
+  getMoveTargets,
+  sendCallModeration,
+} from '../../plugins/call/callModeration';
 import { UserAvatar } from '../../components/user-avatar';
 
 function CallMemberVolume({ userId, displayName }: { userId: string; displayName: string }) {
@@ -244,41 +252,165 @@ function CallMemberVolume({ userId, displayName }: { userId: string; displayName
   const percent = Math.round(volume * 100);
 
   return (
+    <Box direction="Column" gap="200" style={{ padding: config.space.S300 }}>
+      <div className="zennith-voice-volume-row">
+        <IconButton
+          size="300"
+          radii="300"
+          variant="Surface"
+          fill="None"
+          aria-label={percent === 0 ? 'Unmute user' : 'Mute user'}
+          aria-pressed={percent === 0}
+          onClick={() => setUserVolume(userId, percent === 0 ? 1 : 0)}
+        >
+          <Icon size="100" src={percent === 0 ? Icons.VolumeMute : Icons.VolumeHigh} />
+        </IconButton>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={percent}
+          aria-label={`Volume for ${displayName}`}
+          aria-valuetext={`${percent}%`}
+          onChange={(evt) => setUserVolume(userId, Number(evt.currentTarget.value) / 100)}
+        />
+        <Text size="T200" style={{ minWidth: toRem(34), textAlign: 'right' }}>
+          {percent}%
+        </Text>
+      </div>
+      <Text size="T200" priority="300">
+        Saved for every call.
+      </Text>
+    </Box>
+  );
+}
+
+function CallMemberModeration({
+  room,
+  spaceId,
+  userId,
+  deviceIds,
+  requestClose,
+}: {
+  room: Room;
+  spaceId?: string;
+  userId: string;
+  deviceIds: string[];
+  requestClose: () => void;
+}) {
+  const mx = useMatrixClient();
+  const [showTargets, setShowTargets] = useState(false);
+  const [sendState, sendCommand] = useAsyncCallback(
+    useCallback(
+      (content: Omit<CallModerationContent, 'ts'>) =>
+        sendCallModeration(mx, userId, deviceIds, content),
+      [mx, userId, deviceIds]
+    )
+  );
+  const busy = sendState.status === AsyncStatus.Loading;
+
+  useEffect(() => {
+    if (sendState.status === AsyncStatus.Success) requestClose();
+  }, [sendState.status, requestClose]);
+
+  const space = spaceId ? mx.getRoom(spaceId) : null;
+  const targets = space ? getMoveTargets(mx, space, room.roomId) : [];
+
+  return (
+    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+      <MenuItem
+        size="300"
+        radii="300"
+        variant="Critical"
+        fill="None"
+        disabled={busy}
+        before={<Icon size="100" src={Icons.PhoneDown} />}
+        onClick={() => sendCommand({ action: 'disconnect', room_id: room.roomId })}
+      >
+        <Text size="T300">Disconnect</Text>
+      </MenuItem>
+      {targets.length > 0 && (
+        <MenuItem
+          size="300"
+          radii="300"
+          fill="None"
+          disabled={busy}
+          aria-expanded={showTargets}
+          before={<Icon size="100" src={Icons.ArrowRight} />}
+          after={<Icon size="50" src={showTargets ? Icons.ChevronBottom : Icons.ChevronRight} />}
+          onClick={() => setShowTargets(!showTargets)}
+        >
+          <Text size="T300">Move to</Text>
+        </MenuItem>
+      )}
+      {showTargets &&
+        targets.map((target) => (
+          <MenuItem
+            key={target.roomId}
+            size="300"
+            radii="300"
+            fill="None"
+            disabled={busy}
+            style={{ paddingLeft: config.space.S500 }}
+            before={<Icon size="50" src={Icons.VolumeHigh} />}
+            onClick={() =>
+              sendCommand({ action: 'move', room_id: room.roomId, target_room_id: target.roomId })
+            }
+          >
+            <Text size="T300" truncate>
+              {target.name}
+            </Text>
+          </MenuItem>
+        ))}
+      <Box style={{ padding: `0 ${config.space.S200}` }}>
+        <Text size="T200" priority="300">
+          {sendState.status === AsyncStatus.Error
+            ? "Couldn't send. Try again."
+            : 'Works on Zennith clients only.'}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+function CallMemberMenu({
+  room,
+  spaceId,
+  userId,
+  displayName,
+  deviceIds,
+  canModerate,
+  requestClose,
+}: {
+  room: Room;
+  spaceId?: string;
+  userId: string;
+  displayName: string;
+  deviceIds: string[];
+  canModerate: boolean;
+  requestClose: () => void;
+}) {
+  return (
     <Menu style={{ width: toRem(220) }}>
-      <Box direction="Column" gap="200" style={{ padding: config.space.S300 }}>
+      <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
         <Text size="L400" truncate>
           {displayName}
         </Text>
-        <div className="zennith-voice-volume-row">
-          <IconButton
-            size="300"
-            radii="300"
-            variant="Surface"
-            fill="None"
-            aria-label={percent === 0 ? 'Unmute user' : 'Mute user'}
-            aria-pressed={percent === 0}
-            onClick={() => setUserVolume(userId, percent === 0 ? 1 : 0)}
-          >
-            <Icon size="100" src={percent === 0 ? Icons.VolumeMute : Icons.VolumeHigh} />
-          </IconButton>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={percent}
-            aria-label={`Volume for ${displayName}`}
-            aria-valuetext={`${percent}%`}
-            onChange={(evt) => setUserVolume(userId, Number(evt.currentTarget.value) / 100)}
-          />
-          <Text size="T200" style={{ minWidth: toRem(34), textAlign: 'right' }}>
-            {percent}%
-          </Text>
-        </div>
-        <Text size="T200" priority="300">
-          Saved for every call.
-        </Text>
       </Box>
+      <CallMemberVolume userId={userId} displayName={displayName} />
+      {canModerate && (
+        <>
+          <Line variant="Surface" size="300" />
+          <CallMemberModeration
+            room={room}
+            spaceId={spaceId}
+            userId={userId}
+            deviceIds={deviceIds}
+            requestClose={requestClose}
+          />
+        </>
+      )}
     </Menu>
   );
 }
@@ -288,12 +420,15 @@ function CallMemberSubItem({
   roomId,
   spaceId,
   inCall,
+  deviceIds,
 }: {
   userId: string;
   roomId: string;
   spaceId?: string;
   // Speaking / sharing state only comes from the call we are in.
   inCall?: boolean;
+  // The member's devices in this call, for moderator commands.
+  deviceIds: string[];
 }) {
   const mx = useMatrixClient();
   const profile = useUserProfile(userId);
@@ -306,11 +441,17 @@ function CallMemberSubItem({
   const isSelf = userId === mx.getUserId();
   const volume = useUserVolume(userId);
   const presence = useCallPresence();
-  const isSpeaking = inCall && presence.speaking.has(userId);
+  const speakers = useCallSpeakers();
+  const isSpeaking = inCall && speakers.has(userId);
   const isSharing = inCall && presence.sharing.has(userId);
 
   const [imgError, setImgError] = useState(false);
   const [volumeAnchor, setVolumeAnchor] = useState<RectCords>();
+  const closeMenu = useCallback(() => setVolumeAnchor(undefined), []);
+  const room = mx.getRoom(roomId);
+  const myUserId = mx.getUserId();
+  const canModerate =
+    !!room && !!myUserId && deviceIds.length > 0 && canModerateCall(mx, room, myUserId, userId);
 
   // Discord-style colored avatar fallback — deterministic hue from userId.
   const hue = userId
@@ -392,7 +533,21 @@ function CallMemberSubItem({
             escapeDeactivates: stopPropagation,
           }}
         >
-          <CallMemberVolume userId={userId} displayName={displayName} />
+          {room ? (
+            <CallMemberMenu
+              room={room}
+              spaceId={spaceId}
+              userId={userId}
+              displayName={displayName}
+              deviceIds={deviceIds}
+              canModerate={canModerate}
+              requestClose={closeMenu}
+            />
+          ) : (
+            <Menu>
+              <CallMemberVolume userId={userId} displayName={displayName} />
+            </Menu>
+          )}
         </FocusTrap>
       }
     >
@@ -419,9 +574,9 @@ function CallMemberSubItem({
           <IconButton
             className="zennith-voice-volume-btn"
             onClick={handleOpenVolume}
-            aria-label={`Volume for ${displayName}`}
+            aria-label={canModerate ? `Options for ${displayName}` : `Volume for ${displayName}`}
             aria-pressed={!!volumeAnchor}
-            title="Volume"
+            title={canModerate ? 'Volume and moderation' : 'Volume'}
             variant="Background"
             fill="None"
             size="300"
@@ -687,9 +842,14 @@ export function RoomNavItem({
       return;
     }
 
-    // Do not join if already in call
     if (callEmbed) {
-      return;
+      // Already in a call here: nothing to do.
+      if (callEmbed.roomId === room.roomId) return;
+      // In a call in another channel: switch straight away (and still navigate).
+      if (callEmbed.joined) {
+        startCall(room, callPref);
+        return;
+      }
     }
     // Start call in second click
     if (selected) {
@@ -793,6 +953,9 @@ export function RoomNavItem({
                 roomId={room.roomId}
                 spaceId={space?.roomId}
                 inCall={callEmbed?.roomId === room.roomId}
+                deviceIds={callMembers
+                  .filter((m) => m.userId === member.userId)
+                  .map((m) => m.deviceId)}
               />
             ))}
             {voiceUsers.length > 10 && (

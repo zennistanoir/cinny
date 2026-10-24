@@ -34,7 +34,13 @@ export const MessageTextBody = as<'div', css.MessageTextBodyVariants & { notice?
       as={asComp}
       size="T400"
       priority={notice ? '300' : '400'}
-      className={classNames(css.MessageTextBody({ preWrap, jumboEmoji, emote }), className)}
+      className={classNames(
+        css.MessageTextBody({ preWrap, jumboEmoji, emote }),
+        // Hooks for Settings > Accessibility message text size.
+        'zennith-msg-body',
+        jumboEmoji && 'zennith-msg-jumbo',
+        className
+      )}
       {...props}
       ref={ref}
     />

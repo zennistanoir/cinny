@@ -1,60 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CallEmbed } from '../plugins/call';
-import { useMutationObserver } from './useMutationObserver';
-import { isUserId } from '../utils/matrix';
-import { useCallMembers, useCallSession } from './useCall';
-import { useCallJoined } from './useCallEmbed';
+import { useMemo } from 'react';
+import { useMatrixClient } from './useMatrixClient';
+import { useCallPresence } from '../plugins/call/ecBridge';
+import { useLocalSpeaking } from '../plugins/call/noiseSuppression';
 
-export const useCallSpeakers = (callEmbed: CallEmbed): Set<string> => {
-  const [speakers, setSpeakers] = useState(new Set<string>());
-  const callSession = useCallSession(callEmbed.room);
-  const callMembers = useCallMembers(callSession);
-  const joined = useCallJoined(callEmbed);
+// Who is speaking in the call we are in. Others come from LiveKit's speaker
+// detection (via Element Call); our own state comes from the local mic analyser,
+// which reacts without the server's sampling delay.
+export const useCallSpeakers = (): ReadonlySet<string> => {
+  const mx = useMatrixClient();
+  const myUserId = mx.getUserId();
+  const { speaking } = useCallPresence();
+  const localSpeaking = useLocalSpeaking();
 
-  const videoContainers = useMemo(() => {
-    if (callMembers && joined) return callEmbed.document?.querySelectorAll('[data-video-fit]');
-    return undefined;
-  }, [callEmbed, callMembers, joined]);
-
-  const mutationObserver = useMutationObserver(
-    useCallback(
-      (mutations) => {
-        const s = new Set<string>();
-
-        mutations.forEach((mutation) => {
-          if (mutation.type !== 'attributes') return;
-          const el = mutation.target as HTMLElement;
-
-          const style = callEmbed.iframe.contentWindow?.getComputedStyle(el, '::before');
-          if (!style) return;
-          const tileBackgroundImage = style.getPropertyValue('background-image');
-          const speaking = tileBackgroundImage !== 'none';
-          if (!speaking) return;
-
-          const speakerId = el.querySelector('[aria-label]')?.getAttribute('aria-label');
-          if (speakerId && isUserId(speakerId)) {
-            s.add(speakerId);
-          }
-        });
-
-        setSpeakers(s);
-      },
-      [callEmbed]
-    )
-  );
-
-  useEffect(() => {
-    videoContainers?.forEach((element) => {
-      mutationObserver.observe(element, {
-        attributes: true,
-        attributeFilter: ['class', 'style'],
-      });
-    });
-
-    return () => {
-      mutationObserver.disconnect();
-    };
-  }, [videoContainers, mutationObserver]);
-
-  return speakers;
+  return useMemo(() => {
+    if (localSpeaking === undefined || !myUserId) return speaking;
+    if (speaking.has(myUserId) === localSpeaking) return speaking;
+    const next = new Set(speaking);
+    if (localSpeaking) next.add(myUserId);
+    else next.delete(myUserId);
+    return next;
+  }, [speaking, localSpeaking, myUserId]);
 };

@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
@@ -18,8 +18,11 @@ import {
   toRem,
 } from 'folds';
 import {
+  ClientEvent,
   EventTimelineSetHandlerMap,
   EventType,
+  KnownMembership,
+  MatrixEvent,
   RelationType,
   Room,
   RoomEvent,
@@ -46,10 +49,10 @@ import { useCallMembersChange, useCallSession } from '../hooks/useCall';
 import { useRoomAvatar, useRoomName } from '../hooks/useRoomMeta';
 import { mDirectAtom } from '../state/mDirectList';
 import { useMediaAuthentication } from '../hooks/useMediaAuthentication';
-import { mxcUrlToHttp } from '../utils/matrix';
 import { RoomAvatar, RoomIcon } from './room-avatar';
 import { useRoomNavigate } from '../hooks/useRoomNavigate';
-import { getStateEvent } from '../utils/room';
+import { getMemberDisplayName, getStateEvent } from '../utils/room';
+import { getMxIdLocalPart, mxcUrlToHttp } from '../utils/matrix';
 import { StateEvent } from '../../types/matrix/room';
 import { getPowersLevelFromMatrixEvent } from '../hooks/usePowerLevels';
 import { getRoomCreatorsForRoomId } from '../hooks/useRoomCreators';
@@ -62,18 +65,42 @@ import { settingsAtom } from '../state/settings';
 import '../plugins/call/iframeMedia';
 import { setNoiseSuppressionEnabled, setVoiceGate } from '../plugins/call/noiseSuppression';
 import { CallControlEvent } from '../plugins/call/CallControl';
-import { playToggleSound } from '../plugins/call/toggleSounds';
+import { playToggleSound, ToggleSound } from '../plugins/call/toggleSounds';
+import { CALL_CUE_EVENT, showCallCue } from '../plugins/call/callCues';
+import {
+  CALL_MODERATION_EVENT,
+  canModerateCall,
+  parseCallModeration,
+} from '../plugins/call/callModeration';
+
+// A call event cue: the toggle sound and / or a visual caption
+// (Settings > Accessibility > Visual call cues).
+const useCallCue = () => {
+  const [sounds] = useSetting(settingsAtom, 'callToggleSounds');
+  const [captions] = useSetting(settingsAtom, 'visualCallCues');
+  const cue = useCallback(
+    (sound: ToggleSound, caption: string) => {
+      if (sounds) playToggleSound(sound);
+      if (captions) showCallCue(caption);
+    },
+    [sounds, captions]
+  );
+  return { enabled: sounds || captions, cue };
+};
 
 function NoiseSuppressionSync() {
   const [noiseSuppression] = useSetting(settingsAtom, 'noiseSuppression');
-  const [toggleSounds] = useSetting(settingsAtom, 'callToggleSounds');
+  const { cue } = useCallCue();
   const prevRef = useRef(noiseSuppression);
 
   useEffect(() => {
     setNoiseSuppressionEnabled(noiseSuppression);
     // Cue only real changes (call menu or settings), not the initial value.
-    if (prevRef.current !== noiseSuppression && toggleSounds) {
-      playToggleSound(noiseSuppression ? 'noiseSuppressionOn' : 'noiseSuppressionOff');
+    if (prevRef.current !== noiseSuppression) {
+      cue(
+        noiseSuppression ? 'noiseSuppressionOn' : 'noiseSuppressionOff',
+        noiseSuppression ? 'Noise suppression on' : 'Noise suppression off'
+      );
     }
     prevRef.current = noiseSuppression;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +122,7 @@ const LINKED_TOGGLE_WINDOW_MS = 1000;
 // controls, voice panel, profile card, keybinds, Element Call itself).
 function CallToggleSounds({ embed }: { embed: CallEmbed }) {
   const joined = useCallJoined(embed);
-  const [enabled] = useSetting(settingsAtom, 'callToggleSounds');
+  const { enabled, cue } = useCallCue();
 
   useEffect(() => {
     if (!joined || !enabled) return undefined;
@@ -109,14 +136,17 @@ function CallToggleSounds({ embed }: { embed: CallEmbed }) {
       if (control.sound !== sound) {
         sound = control.sound;
         if (now >= ignoreSoundUntil) {
-          playToggleSound(sound ? 'undeafen' : 'deafen');
+          cue(sound ? 'undeafen' : 'deafen', sound ? 'Undeafened' : 'Deafened');
           ignoreMicUntil = now + LINKED_TOGGLE_WINDOW_MS;
         }
       }
       if (control.microphone !== microphone) {
         microphone = control.microphone;
         if (now >= ignoreMicUntil) {
-          playToggleSound(microphone ? 'unmute' : 'mute');
+          cue(
+            microphone ? 'unmute' : 'mute',
+            microphone ? 'Microphone unmuted' : 'Microphone muted'
+          );
           ignoreSoundUntil = now + LINKED_TOGGLE_WINDOW_MS;
         }
       }
@@ -126,7 +156,7 @@ function CallToggleSounds({ embed }: { embed: CallEmbed }) {
     return () => {
       control.off(CallControlEvent.StateUpdate, handleUpdate);
     };
-  }, [embed, joined, enabled]);
+  }, [embed, joined, enabled, cue]);
 
   return null;
 }
@@ -141,7 +171,7 @@ const SCREEN_SHARE_SETTLE_MS = 600;
 // plays its own sound when one starts).
 function ScreenShareEndedSound({ embed }: { embed: CallEmbed }) {
   const joined = useCallJoined(embed);
-  const [enabled] = useSetting(settingsAtom, 'callToggleSounds');
+  const { enabled, cue } = useCallCue();
 
   useEffect(() => {
     const doc = embed.document;
@@ -160,7 +190,7 @@ function ScreenShareEndedSound({ embed }: { embed: CallEmbed }) {
       settleTimer = window.setTimeout(() => {
         settleTimer = undefined;
         const now = count();
-        if (now < shares) playToggleSound('screenShareEnded');
+        if (now < shares) cue('screenShareEnded', 'Screen share ended');
         shares = now;
       }, SCREEN_SHARE_SETTLE_MS);
     });
@@ -170,7 +200,7 @@ function ScreenShareEndedSound({ embed }: { embed: CallEmbed }) {
       observer.disconnect();
       window.clearTimeout(settleTimer);
     };
-  }, [embed, joined, enabled]);
+  }, [embed, joined, enabled, cue]);
 
   return null;
 }
@@ -598,16 +628,217 @@ function IncomingCallListener({ callEmbed, joined }: IncomingCallListenerProps) 
   ) : null;
 }
 
+// Visual call cue for people joining or leaving the call we are in (Element
+// Call plays the sounds itself).
+function CallMemberCues({ embed }: { embed: CallEmbed }) {
+  const joined = useCallJoined(embed);
+  const [captions] = useSetting(settingsAtom, 'visualCallCues');
+  const session = useCallSession(embed.room);
+  const usersRef = useRef<Set<string>>();
+
+  const active = joined && captions;
+  useEffect(() => {
+    usersRef.current = active
+      ? new Set(session.memberships.map((m) => m.sender).filter((s): s is string => !!s))
+      : undefined;
+  }, [active, session]);
+
+  useCallMembersChange(
+    session,
+    useCallback(
+      (memberships) => {
+        const prev = usersRef.current;
+        if (!prev) return;
+        const next = new Set(memberships.map((m) => m.sender).filter((s): s is string => !!s));
+        usersRef.current = next;
+        const myUserId = embed.room.client.getUserId();
+        const name = (userId: string) =>
+          getMemberDisplayName(embed.room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+        next.forEach((userId) => {
+          if (!prev.has(userId) && userId !== myUserId) showCallCue(`${name(userId)} joined`);
+        });
+        prev.forEach((userId) => {
+          if (!next.has(userId) && userId !== myUserId) showCallCue(`${name(userId)} left`);
+        });
+      },
+      [embed]
+    )
+  );
+
+  return null;
+}
+
+const CALL_CUE_MS = 2500;
+const MAX_CALL_CUES = 3;
+
+// Captions from showCallCue (Settings > Accessibility > Visual call cues).
+function CallCueCaptions() {
+  const [captions] = useSetting(settingsAtom, 'visualCallCues');
+  const [cues, setCues] = useState<Array<{ id: number; text: string }>>([]);
+
+  useEffect(() => {
+    if (!captions) {
+      setCues([]);
+      return undefined;
+    }
+    let nextId = 0;
+    const timers = new Set<number>();
+    const handleCue = (evt: Event) => {
+      const text = (evt as CustomEvent<string>).detail;
+      if (typeof text !== 'string') return;
+      nextId += 1;
+      const id = nextId;
+      setCues((current) => [...current, { id, text }].slice(-MAX_CALL_CUES));
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        setCues((current) => current.filter((c) => c.id !== id));
+      }, CALL_CUE_MS);
+      timers.add(timer);
+    };
+    window.addEventListener(CALL_CUE_EVENT, handleCue);
+    return () => {
+      window.removeEventListener(CALL_CUE_EVENT, handleCue);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [captions]);
+
+  if (!captions) return null;
+  return (
+    <Box
+      role="status"
+      aria-live="polite"
+      direction="Column"
+      alignItems="Center"
+      gap="100"
+      style={{
+        position: 'fixed',
+        left: '50%',
+        top: config.space.S400,
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        pointerEvents: 'none',
+      }}
+    >
+      {cues.map((cue) => (
+        <Box
+          key={cue.id}
+          alignItems="Center"
+          gap="200"
+          style={{
+            padding: `${config.space.S200} ${config.space.S400}`,
+            borderRadius: config.radii.Pill,
+            background: color.Surface.Container,
+            color: color.Surface.OnContainer,
+            border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+          }}
+        >
+          <Icon size="100" src={Icons.Phone} />
+          <Text size="T300">{cue.text}</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+const MODERATION_NOTICE_MS = 6000;
+
+// Obeys moderator disconnect / move commands for the call we are in. Only
+// commands for that call, from someone who could kick us there, are acted on;
+// anything else is dropped silently.
+function CallModerationListener() {
+  const mx = useMatrixClient();
+  const store = useStore();
+  const startCall = useCallStart();
+  const { navigateRoom } = useRoomNavigate();
+  const [notice, setNotice] = useState<string>();
+
+  useEffect(() => {
+    const handleToDevice = (event: MatrixEvent) => {
+      if (event.getType() !== CALL_MODERATION_EVENT) return;
+      const command = parseCallModeration(event.getContent());
+      const sender = event.getSender();
+      const myUserId = mx.getUserId();
+      const embed = store.get(callEmbedAtom);
+      if (!command || !sender || !myUserId || !embed) return;
+      if (embed.roomId !== command.room_id) return;
+      const room = mx.getRoom(command.room_id);
+      if (!room || !canModerateCall(mx, room, sender, myUserId)) return;
+
+      const by = room.getMember(sender)?.name ?? sender;
+      if (command.action === 'move' && command.target_room_id) {
+        const target = mx.getRoom(command.target_room_id);
+        const canMove =
+          target &&
+          target.isCallRoom() &&
+          target.getMyMembership() === KnownMembership.Join &&
+          target.getMember(sender)?.membership === KnownMembership.Join;
+        if (target && canMove) {
+          startCall(target).catch(() => undefined);
+          navigateRoom(target.roomId);
+          setNotice(`Moved to ${target.name} by ${by}.`);
+          return;
+        }
+        embed.hangup().catch(() => undefined);
+        setNotice(`Disconnected by ${by}. You aren't in the voice channel they moved you to.`);
+        return;
+      }
+      embed.hangup().catch(() => undefined);
+      setNotice(`Disconnected by ${by}.`);
+    };
+
+    mx.on(ClientEvent.ToDeviceEvent, handleToDevice);
+    return () => {
+      mx.off(ClientEvent.ToDeviceEvent, handleToDevice);
+    };
+  }, [mx, store, startCall, navigateRoom]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(undefined), MODERATION_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  if (!notice) return null;
+  return (
+    <Box
+      role="status"
+      aria-live="polite"
+      alignItems="Center"
+      gap="200"
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: config.space.S400,
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        maxWidth: toRem(360),
+        padding: `${config.space.S300} ${config.space.S400}`,
+        borderRadius: config.radii.R400,
+        background: color.Surface.Container,
+        color: color.Surface.OnContainer,
+        border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+      }}
+    >
+      <Icon size="200" src={Icons.Phone} />
+      <Text size="T300">{notice}</Text>
+    </Box>
+  );
+}
+
 function CallUtils({ embed }: { embed: CallEmbed }) {
   const setCallEmbed = useSetAtom(callEmbedAtom);
+  const store = useStore();
 
   useCallMemberSoundSync(embed);
   useCallThemeSync(embed);
   useCallHangupEvent(
     embed,
     useCallback(() => {
-      setCallEmbed(undefined);
-    }, [setCallEmbed])
+      // A channel switch may already have replaced this embed with the next call.
+      if (store.get(callEmbedAtom) === embed) setCallEmbed(undefined);
+    }, [store, embed, setCallEmbed])
   );
 
   return null;
@@ -634,8 +865,11 @@ export function CallEmbedProvider({ children }: CallEmbedProviderProps) {
       {callEmbed && <CallUtils embed={callEmbed} />}
       {callEmbed && <CallToggleSounds embed={callEmbed} />}
       {callEmbed && <ScreenShareEndedSound embed={callEmbed} />}
+      {callEmbed && <CallMemberCues embed={callEmbed} />}
+      <CallCueCaptions />
       <CallEmbedRefContextProvider value={callEmbedRef}>
         <IncomingCallListener callEmbed={callEmbed} joined={joined} />
+        <CallModerationListener />
         <GlobalKeybindsListener />
         <NoiseSuppressionSync />
         {children}

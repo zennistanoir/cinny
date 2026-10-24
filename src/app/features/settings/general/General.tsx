@@ -260,7 +260,7 @@ function SystemThemePreferences() {
   );
 }
 
-function PageZoomInput() {
+export function PageZoomInput() {
   const [pageZoom, setPageZoom] = useSetting(settingsAtom, 'pageZoom');
   const [currentZoom, setCurrentZoom] = useState(`${pageZoom}`);
 

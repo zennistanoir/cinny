@@ -131,6 +131,15 @@ export function About({ requestClose }: AboutProps) {
                     </li>
                     <li>
                       <Text size="T300">
+                        Zennith was forked and developed with the help of AI (
+                        <a href="https://claude.com/claude-code" rel="noreferrer noopener" target="_blank">
+                          Claude Code
+                        </a>{' '}
+                        by Anthropic).
+                      </Text>
+                    </li>
+                    <li>
+                      <Text size="T300">
                         The{' '}
                         <a
                           href="https://github.com/matrix-org/matrix-js-sdk"

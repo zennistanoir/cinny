@@ -49,7 +49,7 @@ const readOutputDevice = (): string => {
   }
 };
 
-const getContext = async (): Promise<SinkAudioContext | undefined> => {
+export const getContext = async (): Promise<SinkAudioContext | undefined> => {
   if (!ctx) {
     try {
       ctx = new AudioContext();

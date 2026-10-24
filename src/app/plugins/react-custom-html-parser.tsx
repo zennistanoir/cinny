@@ -41,6 +41,7 @@ import {
 import { onEnterOrSpace } from '../utils/keyboard';
 import { copyToClipboard, tryDecodeURIComponent } from '../utils/dom';
 import { useTimeoutToggle } from '../hooks/useTimeoutToggle';
+import { PausableImg } from '../components/PausableImg';
 
 const ReactPrism = lazy(() => import('./react-prism/ReactPrism'));
 
@@ -484,14 +485,20 @@ export const getReactCustomHtmlParser = (
           }
           if (htmlSrc && 'data-mx-emoticon' in props) {
             return (
-              <span className={css.EmoticonBase}>
+              <span className={classNames(css.EmoticonBase, 'zennith-freeze-host')}>
                 <span className={css.Emoticon()}>
-                  <img {...props} className={css.EmoticonImg} src={htmlSrc} />
+                  <PausableImg {...props} className={css.EmoticonImg} src={htmlSrc} />
                 </span>
               </span>
             );
           }
-          if (htmlSrc) return <img {...props} className={css.Img} src={htmlSrc} />;
+          if (htmlSrc) {
+            return (
+              <span className="zennith-freeze-host">
+                <PausableImg {...props} className={css.Img} src={htmlSrc} />
+              </span>
+            );
+          }
         }
       }
 

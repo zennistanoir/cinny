@@ -15,7 +15,7 @@ import * as css from './styles.css';
 type MemberGlanceProps = {
   room: Room;
   members: CallMembership[];
-  speakers: Set<string>;
+  speakers: ReadonlySet<string>;
   max?: number;
 };
 export function MemberGlance({ room, members, speakers, max = 6 }: MemberGlanceProps) {

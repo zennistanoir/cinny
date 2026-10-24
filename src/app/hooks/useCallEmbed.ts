@@ -1,6 +1,6 @@
 import { createContext, RefObject, useCallback, useContext, useEffect, useState } from 'react';
 import { MatrixClient, Room } from 'matrix-js-sdk';
-import { useSetAtom } from 'jotai';
+import { useSetAtom, useStore } from 'jotai';
 import {
   CallEmbed,
   ElementCallThemeKind,
@@ -55,23 +55,57 @@ export const createCallEmbed = (
   return embed;
 };
 
+// Resolves once Element Call reports the call ended, or after the timeout.
+const waitForCallEnd = (embed: CallEmbed, timeoutMs = 3000): Promise<void> =>
+  new Promise((resolve) => {
+    const offs: Array<() => void> = [];
+    let timer: number | undefined;
+    const done = () => {
+      window.clearTimeout(timer);
+      offs.forEach((off) => off());
+      resolve();
+    };
+    timer = window.setTimeout(done, timeoutMs);
+    offs.push(embed.listenAction(ElementWidgetActions.HangupCall, done));
+    offs.push(embed.listenAction(ElementWidgetActions.Close, done));
+  });
+
+// Bumped on every start so a slower switch can't override a newer one.
+let startSeq = 0;
+
 export const useCallStart = (dm = false) => {
   const mx = useMatrixClient();
   const theme = useTheme();
+  const store = useStore();
   const setCallEmbed = useSetAtom(callEmbedAtom);
   const callEmbedRef = useCallEmbedRef();
 
   const startCall = useCallback(
-    (room: Room, pref?: CallPreferences) => {
+    async (room: Room, pref?: CallPreferences) => {
       const container = callEmbedRef.current;
       if (!container) {
         throw new Error('Failed to start call, No embed container element found!');
       }
-      const callEmbed = createCallEmbed(mx, room, dm, theme.kind, container, pref);
+      startSeq += 1;
+      const seq = startSeq;
 
-      setCallEmbed(callEmbed);
+      // Already in a call elsewhere: leave it properly first, so our membership is
+      // removed from that room instead of lingering as a ghost, and keep the
+      // current mute/deafen state for the new channel. Video follows the request.
+      let nextPref = pref;
+      const current = store.get(callEmbedAtom);
+      if (current && current.roomId !== room.roomId && current.joined) {
+        const { microphone, video, sound } = current.control;
+        nextPref = { microphone, sound, video: pref?.video ?? video };
+        const ended = waitForCallEnd(current);
+        current.hangup().catch(() => undefined);
+        await ended;
+        if (seq !== startSeq) return;
+      }
+
+      setCallEmbed(createCallEmbed(mx, room, dm, theme.kind, container, nextPref));
     },
-    [mx, dm, theme, setCallEmbed, callEmbedRef]
+    [mx, dm, theme, store, setCallEmbed, callEmbedRef]
   );
 
   return startCall;

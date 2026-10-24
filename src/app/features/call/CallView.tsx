@@ -68,8 +68,8 @@ function NoPermissionMessage() {
 
 function AlreadyInCallMessage() {
   return (
-    <Text style={{ margin: 'auto', color: color.Warning.Main }} size="L400" align="Center">
-      Already in another call — End the current call to join!
+    <Text style={{ margin: 'auto' }} size="L400" align="Center" priority="300">
+      You&#39;re in another voice channel. Switching leaves it.
     </Text>
   );
 }

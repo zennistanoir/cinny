@@ -8,6 +8,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.9',
+    items: [
+      'Soundboard: play short sounds into the call from the call controls. Moderators add them in Space Settings → Soundboard.',
+      'Switch voice channels without hanging up first: just click another one.',
+      'Moderators can right-click someone in a voice channel to disconnect them or move them to another channel.',
+      'New Accessibility page in Settings: reduced motion, high contrast, focus rings, text size, line spacing, a readable font, paused GIFs and visual call cues.',
+      'Your own speaking ring lights up as soon as you talk, and everyone else’s reacts faster.',
+      'About page credits that Zennith was forked and developed with the help of AI.',
+    ],
+  },
+  {
     version: '0.1.8',
     items: [
       "Message drafts are kept per room, so a half-written message is still there when you come back.",

@@ -327,7 +327,7 @@ function CallButton() {
         tooltip={
           <Tooltip>
             {inAnotherCall ? (
-              <Text size="L400">Already in another call — End the current call to join!</Text>
+              <Text size="L400">Call (leaves your current call)</Text>
             ) : (
               <Text>Call</Text>
             )}
@@ -348,7 +348,7 @@ function CallButton() {
                 sound: true,
               });
             }}
-            disabled={inAnotherCall || callStarted}
+            disabled={callStarted}
             aria-pressed={!!menuAnchor}
           >
             <Icon size="400" src={Icons.VideoCamera} filled={!!menuAnchor} />

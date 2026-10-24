@@ -245,11 +245,22 @@ export class CallEmbed {
       this.readUpToMap[room.roomId] = roomEvent.getId()!;
     });
 
-    // Attach listeners for feeding events - the underlying widget classes handle permissions for us
-    this.mx.on(ClientEvent.Event, this.onEvent.bind(this));
-    this.mx.on(MatrixEventEvent.Decrypted, this.onEventDecrypted.bind(this));
-    this.mx.on(RoomStateEvent.Events, this.onStateUpdate.bind(this));
-    this.mx.on(ClientEvent.ToDeviceEvent, this.onToDeviceEvent.bind(this));
+    // Attach listeners for feeding events - the underlying widget classes handle permissions for us.
+    // Bound once so dispose() can detach the same function references.
+    const onEvent = this.onEvent.bind(this);
+    const onEventDecrypted = this.onEventDecrypted.bind(this);
+    const onStateUpdate = this.onStateUpdate.bind(this);
+    const onToDeviceEvent = this.onToDeviceEvent.bind(this);
+    this.mx.on(ClientEvent.Event, onEvent);
+    this.mx.on(MatrixEventEvent.Decrypted, onEventDecrypted);
+    this.mx.on(RoomStateEvent.Events, onStateUpdate);
+    this.mx.on(ClientEvent.ToDeviceEvent, onToDeviceEvent);
+    this.disposables.push(() => {
+      this.mx.off(ClientEvent.Event, onEvent);
+      this.mx.off(MatrixEventEvent.Decrypted, onEventDecrypted);
+      this.mx.off(RoomStateEvent.Events, onStateUpdate);
+      this.mx.off(ClientEvent.ToDeviceEvent, onToDeviceEvent);
+    });
   }
 
   /**
@@ -264,11 +275,6 @@ export class CallEmbed {
     this.call.stop();
     this.container.removeChild(this.iframe);
     this.control.dispose();
-
-    this.mx.off(ClientEvent.Event, this.onEvent.bind(this));
-    this.mx.off(MatrixEventEvent.Decrypted, this.onEventDecrypted.bind(this));
-    this.mx.off(RoomStateEvent.Events, this.onStateUpdate.bind(this));
-    this.mx.off(ClientEvent.ToDeviceEvent, this.onToDeviceEvent.bind(this));
 
     // Clear internal state
     this.readUpToMap = {};

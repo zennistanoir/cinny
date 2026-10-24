@@ -6,7 +6,7 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 
 type MemberSpeakingProps = {
   room: Room;
-  speakers: Set<string>;
+  speakers: ReadonlySet<string>;
 };
 export function MemberSpeaking({ room, speakers }: MemberSpeakingProps) {
   const speakingNames = Array.from(speakers).map(
