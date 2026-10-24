@@ -143,6 +143,10 @@ function injectVoiceTreeStyles() {
     '  letter-spacing: 0.04em;',
     '  line-height: 15px;',
     '}',
+    '.zennith-voice-state {',
+    '  flex-shrink: 0;',
+    `  color: ${color.Critical.Main};`,
+    '}',
     '.zennith-voice-volume-row {',
     '  display: flex;',
     '  align-items: center;',
@@ -444,6 +448,8 @@ function CallMemberSubItem({
   const speakers = useCallSpeakers();
   const isSpeaking = inCall && speakers.has(userId);
   const isSharing = inCall && presence.sharing.has(userId);
+  const isDeafened = inCall && presence.deafened.has(userId);
+  const isMuted = inCall && !isDeafened && presence.muted.has(userId);
 
   const [imgError, setImgError] = useState(false);
   const [volumeAnchor, setVolumeAnchor] = useState<RectCords>();
@@ -505,7 +511,12 @@ function CallMemberSubItem({
     setVolumeAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const status = [isSpeaking && 'speaking', isSharing && 'sharing screen']
+  const status = [
+    isSpeaking && 'speaking',
+    isMuted && 'muted',
+    isDeafened && 'deafened',
+    isSharing && 'sharing screen',
+  ]
     .filter(Boolean)
     .join(', ');
 
@@ -566,6 +577,24 @@ function CallMemberSubItem({
               src={volume === 0 ? Icons.VolumeMute : Icons.VolumeHigh}
               style={{ opacity: config.opacity.P300, flexShrink: 0 }}
               aria-label={volume === 0 ? 'Muted by you' : `Volume ${Math.round(volume * 100)}%`}
+            />
+          )}
+          {isMuted && (
+            <Icon
+              className="zennith-voice-state"
+              size="50"
+              src={Icons.MicMute}
+              filled
+              aria-hidden
+            />
+          )}
+          {isDeafened && (
+            <Icon
+              className="zennith-voice-state"
+              size="50"
+              src={Icons.HeadphoneMute}
+              filled
+              aria-hidden
             />
           )}
           {isSharing && <span className="zennith-voice-live">LIVE</span>}

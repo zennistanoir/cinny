@@ -38,6 +38,28 @@ export const setUnreadBadge = (badge: UnreadBadge) => {
   invoke('set_unread_badge', { state: badge }).catch(() => undefined);
 };
 
+// --- Window share cropping -------------------------------------------------------------
+
+// Client-area distances from a window's captured frame, in physical pixels; `width` and
+// `height` are the frame's size. See src-tauri/src/capture.rs.
+export type WindowInsets = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+};
+
+export const getWindowClientInsets = (
+  hwnd: number | undefined,
+  title: string | undefined
+): Promise<WindowInsets | undefined> =>
+  invoke<WindowInsets | null>('window_client_insets', { hwnd, title }).then(
+    (insets) => insets ?? undefined,
+    () => undefined
+  );
+
 // --- Global call hotkeys ---------------------------------------------------------------
 // Registered only while the window is unfocused, so they never fire alongside the
 // in-window keybinds (GlobalKeybindsListener in CallEmbedProvider).

@@ -4,6 +4,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WebviewWindow, WindowEvent};
 
+#[cfg(windows)]
+mod capture;
+
 // Passed by the login item so a launch at sign-in starts in the tray.
 const MINIMIZED_ARG: &str = "--minimized";
 
@@ -18,9 +21,11 @@ fn set_close_to_tray(enabled: bool) {
 // Anti-aliased filled circle, used as the Windows taskbar overlay icon.
 #[cfg(windows)]
 fn dot_icon(rgb: [u8; 3]) -> tauri::image::Image<'static> {
-    const SIZE: u32 = 16;
-    let center = (SIZE as f32 - 1.0) / 2.0;
-    let radius = SIZE as f32 / 2.0 - 0.5;
+    // Windows stretches the overlay over a fixed corner of the taskbar button, so the dot
+    // is drawn smaller than the canvas and pushed into its bottom-right corner.
+    const SIZE: u32 = 32;
+    let center = SIZE as f32 - 11.0;
+    let radius = 9.5;
     let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
     for y in 0..SIZE {
         for x in 0..SIZE {
@@ -105,6 +110,21 @@ fn set_ducking_preference(value: Option<u32>) -> Result<(), String> {
     }
 }
 
+// Client-area insets of a shared window (see capture.rs); `None` off Windows or when the
+// window can't be found.
+#[cfg(windows)]
+#[tauri::command]
+fn window_client_insets(hwnd: Option<i64>, title: Option<String>) -> Option<capture::WindowInsets> {
+    capture::client_insets(hwnd, title)
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn window_client_insets(hwnd: Option<i64>, title: Option<String>) -> Option<()> {
+    let _ = (hwnd, title);
+    None
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -168,7 +188,8 @@ pub fn run() {
             set_close_to_tray,
             set_unread_badge,
             get_ducking_preference,
-            set_ducking_preference
+            set_ducking_preference,
+            window_client_insets
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -192,6 +213,9 @@ pub fn run() {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 build_tray(app.handle())?;
             }
+
+            #[cfg(windows)]
+            capture::watch_share_bar();
 
             // The window starts hidden (tauri.conf.json) so a login launch never flashes.
             if !std::env::args().any(|arg| arg == MINIMIZED_ARG) {

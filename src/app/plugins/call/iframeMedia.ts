@@ -1,6 +1,7 @@
 import { patchMedia } from './noiseSuppression';
 import { patchPeerConnection } from './callStats';
 import { installElementCallBridge } from './ecBridge';
+import { patchWindowShareCrop } from './windowCrop';
 
 // Element Call's index.html is built with an inline script that calls
 // `parent.__zennithPatchMedia(window)` before its own bundle runs (see
@@ -12,4 +13,5 @@ import { installElementCallBridge } from './ecBridge';
   installElementCallBridge(win);
   patchMedia(win);
   patchPeerConnection(win);
+  patchWindowShareCrop(win);
 };

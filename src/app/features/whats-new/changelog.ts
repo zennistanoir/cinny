@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.10',
+    items: [
+      'Voice channels show a muted or deafened icon next to people, in the room list and on their call tile.',
+      'Desktop app: the “sharing a window” bar no longer pops up at the bottom of the screen when you share.',
+      'Desktop app: window shares show only what the app displays, without its title bar or border.',
+      'Desktop app: the red notification dot on the taskbar icon is smaller.',
+    ],
+  },
+  {
     version: '0.1.9',
     items: [
       'Soundboard: play short sounds into the call from the call controls. Moderators add them in Space Settings → Soundboard.',

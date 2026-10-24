@@ -7,7 +7,8 @@ import path from 'path';
 // installs into the iframe (src/app/plugins/call/ecBridge.ts):
 //   - per-user playback volume is read from / saved to Zennith's store, so it survives
 //     rejoining (Element Call hardcodes 100% on every join)
-//   - speaking and screen-share state is reported for the voice member list
+//   - speaking, mic, deafen and screen-share state is reported for the voice member
+//     list, and deafened Zennith users get a headphone icon on their call tile
 //   - screen-share capture/publish options come from Zennith's quality settings, and the
 //     sharing participant is handed over so changes can be applied mid-stream
 //   - with no device chosen, the system default device is used instead of the first one
@@ -45,6 +46,20 @@ const PATCHES = [
     find: 'speaking$:e.behavior(o.pipe(ZJ(e=>e?m1(e,Y.IsSpeakingChanged).pipe(W(e=>e.isSpeaking)):PJ(!1))))',
     replace:
       'speaking$:(zs=>(window.__zennithEC?.speaking(e,a.userId,a.id,zs),zs))(e.behavior(o.pipe(ZJ(e=>e?m1(e,Y.IsSpeakingChanged).pipe(W(e=>e.isSpeaking)):PJ(!1)))))',
+  },
+  {
+    name: 'mic state and deafen messages',
+    find: 'audioEnabled$:e.behavior(s.pipe(W(e=>e?.microphoneTrack?.isMuted===!1)))',
+    replace:
+      'audioEnabled$:(zm=>(window.__zennithEC?.mic?.(e,a.userId,a.id,zm,o),zm))(e.behavior(s.pipe(W(e=>e?.microphoneTrack?.isMuted===!1))))',
+  },
+  {
+    // Headphone-off icon (folds' HeadphoneMute) in place of the mic icon on tiles of
+    // deafened Zennith users.
+    name: 'deafened tile icon',
+    find: 'nameTagLeadingIcon:(0,B.jsx)(k,{width:20,height:20,"aria-label":ee,"data-muted":r||!S,className:m5.muteIcon})',
+    replace:
+      'nameTagLeadingIcon:(0,R.useSyncExternalStore)(window.__zennithEC?.deafSub??(()=>()=>{}),()=>window.__zennithEC?.deafGet?.(t.userId)??!1)?(0,B.jsx)(`svg`,{width:20,height:20,viewBox:`0 0 24 24`,fill:`currentColor`,"aria-label":`Deafened`,"data-muted":!0,className:m5.muteIcon,children:(0,B.jsx)(`path`,{d:`M6.30762 7.11816C5.18136 8.43019 4.5 10.1353 4.5 12V13H10V21H3V12C3 9.72099 3.84765 7.64033 5.24414 6.05469L6.30762 7.11816ZM20.1895 21H14V14.8105L20.1895 21ZM12 3C16.9706 3 21 7.02944 21 12V18.2754L15.7246 13H19.5V12C19.5 7.85786 16.1421 4.5 12 4.5C10.6283 4.5 9.34351 4.8697 8.2373 5.5127L7.14648 4.42188C8.54711 3.52296 10.2121 3 12 3ZM2.67371 4.89856L3.73437 3.8379L21.0585 21.162L19.9978 22.2227L2.67371 4.89856Z`})}):(0,B.jsx)(k,{width:20,height:20,"aria-label":ee,"data-muted":r||!S,className:m5.muteIcon})',
   },
   {
     name: 'screen-share state',
@@ -103,7 +118,7 @@ export const patchElementCall = (outDir) => ({
       console.warn(
         `\n[zennith] WARNING: ${missed.length} Element Call patch(es) did not apply (Element Call upgraded?):\n  - ${missed.join(
           '\n  - '
-        )}\nPersistent volume / speaking ring / LIVE badge / share quality / default device may not work.\n`
+        )}\nPersistent volume / speaking ring / mute icons / LIVE badge / share quality / default device may not work.\n`
       );
     } else {
       console.log(`[zennith] Patched Element Call bundle (${PATCHES.length} patches).`);

@@ -87,15 +87,36 @@ type Behavior<T> = { subscribe: (cb: (v: T) => void) => { unsubscribe: () => voi
 
 const speakingMedia = new Map<string, string>(); // media id -> user id, while speaking
 const sharingMedia = new Map<string, string>(); // media id -> user id
+// media id -> user id and whether that device's mic is on
+const micMedia = new Map<string, { userId: string; enabled: boolean }>();
+// media id -> user id, for devices that told us they are deafened (Zennith only)
+const deafenedMedia = new Map<string, string>();
 const presenceListeners = new Set<() => void>();
 
-export type CallPresence = { speaking: ReadonlySet<string>; sharing: ReadonlySet<string> };
-let presence: CallPresence = { speaking: new Set(), sharing: new Set() };
+export type CallPresence = {
+  speaking: ReadonlySet<string>;
+  sharing: ReadonlySet<string>;
+  // Every device of the user has its mic off.
+  muted: ReadonlySet<string>;
+  deafened: ReadonlySet<string>;
+};
+let presence: CallPresence = {
+  speaking: new Set(),
+  sharing: new Set(),
+  muted: new Set(),
+  deafened: new Set(),
+};
 
 const emitPresence = () => {
+  const micOn = new Set<string>();
+  const micOff = new Set<string>();
+  micMedia.forEach(({ userId, enabled }) => (enabled ? micOn : micOff).add(userId));
+  micOn.forEach((userId) => micOff.delete(userId));
   presence = {
     speaking: new Set(speakingMedia.values()),
     sharing: new Set(sharingMedia.values()),
+    muted: micOff,
+    deafened: new Set(deafenedMedia.values()),
   };
   presenceListeners.forEach((l) => l());
 };
@@ -111,11 +132,89 @@ export const useCallPresence = (): CallPresence =>
   useSyncExternalStore(subscribePresence, () => presence);
 
 const clearPresence = () => {
-  if (speakingMedia.size === 0 && sharingMedia.size === 0) return;
+  if (
+    speakingMedia.size === 0 &&
+    sharingMedia.size === 0 &&
+    micMedia.size === 0 &&
+    deafenedMedia.size === 0
+  ) {
+    return;
+  }
   speakingMedia.clear();
   sharingMedia.clear();
+  micMedia.clear();
+  deafenedMedia.clear();
   emitPresence();
 };
+
+// --- Deafen state ----------------------------------------------------------------------
+// Deafening is Zennith's own (Element Call has no such state), so each Zennith client
+// tells the others over LiveKit's data channel: on every change, and again whenever
+// someone joins so they learn the current state.
+
+type LkParticipant = {
+  isLocal?: boolean;
+  on?: (event: string, cb: (payload: Uint8Array) => void) => void;
+  off?: (event: string, cb: (payload: Uint8Array) => void) => void;
+  publishData?: (data: Uint8Array, options: { reliable: boolean; topic: string }) => Promise<void>;
+};
+
+const DEAF_TOPIC = 'zennith.voice';
+let localDeafened = false;
+const localParticipants = new Set<LkParticipant>();
+const localMedia = new Map<string, string>(); // media id -> user id, for our own tiles
+const deafListeners = new Set<() => void>();
+
+const emitDeafened = () => {
+  emitPresence();
+  deafListeners.forEach((l) => l());
+};
+
+const syncLocalDeafened = () => {
+  localMedia.forEach((userId, mediaId) => {
+    if (localDeafened) deafenedMedia.set(mediaId, userId);
+    else deafenedMedia.delete(mediaId);
+  });
+};
+
+const announceDeafened = () => {
+  const data = new TextEncoder().encode(JSON.stringify({ deafened: localDeafened }));
+  localParticipants.forEach((p) => {
+    p.publishData?.(data, { reliable: true, topic: DEAF_TOPIC }).catch(() => undefined);
+  });
+};
+
+let announceTimer: number | undefined;
+const announceSoon = () => {
+  window.clearTimeout(announceTimer);
+  announceTimer = window.setTimeout(announceDeafened, 1000);
+};
+
+const readDeafened = (payload: Uint8Array): boolean | undefined => {
+  try {
+    const msg = JSON.parse(new TextDecoder().decode(payload));
+    return typeof msg?.deafened === 'boolean' ? msg.deafened : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// Called by CallControl whenever our sound (deafen) toggle changes.
+export const setLocalDeafened = (deafened: boolean) => {
+  if (deafened === localDeafened) return;
+  localDeafened = deafened;
+  syncLocalDeafened();
+  emitDeafened();
+  announceDeafened();
+};
+
+const subscribeDeafened = (onChange: () => void) => {
+  deafListeners.add(onChange);
+  return () => {
+    deafListeners.delete(onChange);
+  };
+};
+const isDeafened = (userId: string) => presence.deafened.has(userId);
 
 // --- Screen-share quality --------------------------------------------------------------
 
@@ -242,6 +341,57 @@ export const installElementCallBridge = (win: BridgeWindow) => {
         if (speakingMedia.delete(mediaId)) emitPresence();
       });
     },
+    mic: (
+      scope: Scope,
+      userId: string,
+      mediaId: string,
+      audioEnabled$: Behavior<boolean>,
+      participant$: Behavior<LkParticipant | undefined>
+    ) => {
+      const micSub = audioEnabled$.subscribe((enabled) => {
+        const prev = micMedia.get(mediaId);
+        if (prev && prev.enabled === enabled) return;
+        micMedia.set(mediaId, { userId, enabled });
+        emitPresence();
+      });
+      let detach: (() => void) | undefined;
+      const participantSub = participant$.subscribe((p) => {
+        detach?.();
+        detach = undefined;
+        if (!p) return;
+        if (p.isLocal) {
+          localParticipants.add(p);
+          localMedia.set(mediaId, userId);
+          syncLocalDeafened();
+          emitDeafened();
+          detach = () => {
+            localParticipants.delete(p);
+            localMedia.delete(mediaId);
+          };
+          return;
+        }
+        const onData = (payload: Uint8Array) => {
+          const deafened = readDeafened(payload);
+          if (deafened === undefined || deafened === deafenedMedia.has(mediaId)) return;
+          if (deafened) deafenedMedia.set(mediaId, userId);
+          else deafenedMedia.delete(mediaId);
+          emitDeafened();
+        };
+        p.on?.('dataReceived', onData);
+        detach = () => p.off?.('dataReceived', onData);
+        announceSoon();
+      });
+      scope.onEnd(() => {
+        micSub.unsubscribe();
+        participantSub.unsubscribe();
+        detach?.();
+        const hadMic = micMedia.delete(mediaId);
+        if (deafenedMedia.delete(mediaId) || hadMic) emitDeafened();
+      });
+    },
+    // Element Call's tiles ask whether to show the deafened icon instead of the mic.
+    deafSub: subscribeDeafened,
+    deafGet: isDeafened,
     share: (scope: Scope, userId: string, mediaId: string) => {
       sharingMedia.set(mediaId, userId);
       emitPresence();
@@ -259,6 +409,9 @@ export const installElementCallBridge = (win: BridgeWindow) => {
   win.addEventListener('pagehide', () => {
     shareOwner = undefined;
     volumeWatchers.clear();
+    localParticipants.clear();
+    localMedia.clear();
+    window.clearTimeout(announceTimer);
     clearPresence();
   });
 };

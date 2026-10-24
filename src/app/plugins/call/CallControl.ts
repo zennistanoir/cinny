@@ -2,6 +2,7 @@ import { ClientWidgetApi } from 'matrix-widget-api';
 import EventEmitter from 'events';
 import { CallControlState } from './CallControlState';
 import { ElementMediaStateDetail, ElementMediaStatePayload, ElementWidgetActions } from './types';
+import { setLocalDeafened } from './ecBridge';
 
 // Set on the call iframe's <html> while a stream is maximized.
 const MAXIMIZED_ATTR = 'data-zennith-maximized';
@@ -284,6 +285,7 @@ export class CallControl extends EventEmitter implements CallControlState {
   }
 
   private setSound(sound: boolean): void {
+    setLocalDeafened(!sound);
     const callDocument = this.iframe.contentDocument ?? this.iframe.contentWindow?.document;
     if (callDocument) {
       callDocument.querySelectorAll('audio').forEach((el) => {
