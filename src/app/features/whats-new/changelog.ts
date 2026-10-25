@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.14',
+    items: [
+      'The menu you get by right-clicking someone in a voice channel now closes when you click away or press Esc.',
+      'Moderators can disconnect the Zennify music bot or move it to another voice channel from that menu.',
+      'Move to channel is always in the menu for moderators, and greyed out when there is no other voice channel.',
+      'Clicking a different voice channel while you are in a call asks before switching, so a stray click no longer moves you.',
+      'The per-person volume slider has a new look that matches your theme.',
+    ],
+  },
+  {
     version: '0.1.13',
     items: [
       'Press Ctrl + / anywhere to see every keyboard shortcut, with a quick link from Settings → Keybinds.',
