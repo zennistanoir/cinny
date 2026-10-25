@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 // Inject voice-channel participant tree styles once globally.
 // Uses !important to override folds NavItem display:flex.
@@ -451,8 +458,8 @@ function CallMemberModeration({
         </Text>
       </MenuItem>
       {showTargets && (
-        // Scrolls on its own so a long channel list never pushes the menu off screen.
-        <div style={{ maxHeight: toRem(180), overflowY: 'auto' }}>
+        // Long channel lists scroll inside the menu instead of running off-screen.
+        <Box direction="Column" gap="100" style={{ maxHeight: toRem(200), overflowY: 'auto' }}>
           {targets.map((target) => (
             <MenuItem
               key={target.roomId}
@@ -471,7 +478,7 @@ function CallMemberModeration({
               </Text>
             </MenuItem>
           ))}
-        </div>
+        </Box>
       )}
       <Box style={{ padding: `0 ${config.space.S200}` }}>
         <Text size="T200" priority="300">
@@ -499,35 +506,59 @@ type CallMemberMenuProps = {
   memberDevices: CallMemberDevice[];
   canModerate: boolean;
   requestClose: () => void;
+  // Called when the menu changes size (e.g. Move to channel expands), so the
+  // popout can be placed again; folds only places it when it opens.
+  onResize: () => void;
 };
 // forwardRef: FocusTrap needs the menu's DOM node, or it never activates and
 // the popout can't be closed by clicking outside or pressing Escape.
 const CallMemberMenu = forwardRef<HTMLDivElement, CallMemberMenuProps>(
-  ({ room, spaceId, userId, displayName, memberDevices, canModerate, requestClose }, ref) => (
-    <Menu
-      ref={ref}
-      style={{ width: toRem(240), maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
-    >
-      <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
-        <Text size="L400" truncate>
-          {displayName}
-        </Text>
-      </Box>
-      <CallMemberVolume userId={userId} displayName={displayName} />
-      {canModerate && (
-        <>
-          <Line variant="Surface" size="300" />
-          <CallMemberModeration
-            room={room}
-            spaceId={spaceId}
-            userId={userId}
-            memberDevices={memberDevices}
-            requestClose={requestClose}
-          />
-        </>
-      )}
-    </Menu>
-  )
+  (
+    { room, spaceId, userId, displayName, memberDevices, canModerate, requestClose, onResize },
+    ref
+  ) => {
+    const contentRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      const el = contentRef.current;
+      if (!el) return undefined;
+      let lastHeight = el.offsetHeight;
+      const observer = new ResizeObserver(() => {
+        if (el.offsetHeight === lastHeight) return;
+        lastHeight = el.offsetHeight;
+        onResize();
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+    }, [onResize]);
+
+    return (
+      <Menu
+        ref={ref}
+        style={{ width: toRem(240), maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}
+      >
+        <div ref={contentRef}>
+          <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
+            <Text size="L400" truncate>
+              {displayName}
+            </Text>
+          </Box>
+          <CallMemberVolume userId={userId} displayName={displayName} />
+          {canModerate && (
+            <>
+              <Line variant="Surface" size="300" />
+              <CallMemberModeration
+                room={room}
+                spaceId={spaceId}
+                userId={userId}
+                memberDevices={memberDevices}
+                requestClose={requestClose}
+              />
+            </>
+          )}
+        </div>
+      </Menu>
+    );
+  }
 );
 
 function CallMemberSubItem({
@@ -565,6 +596,12 @@ function CallMemberSubItem({
   const [imgError, setImgError] = useState(false);
   const [volumeAnchor, setVolumeAnchor] = useState<RectCords>();
   const closeMenu = useCallback(() => setVolumeAnchor(undefined), []);
+  // A fresh anchor object makes PopOut measure and place the menu again. Copy
+  // the fields by hand: a DOMRect's are getters, so spreading it gives {}.
+  const repositionMenu = useCallback(
+    () => setVolumeAnchor((a) => a && { x: a.x, y: a.y, width: a.width, height: a.height }),
+    []
+  );
   const room = mx.getRoom(roomId);
   const myUserId = mx.getUserId();
   const canModerate =
@@ -650,8 +687,7 @@ function CallMemberSubItem({
     <PopOut
       anchor={volumeAnchor}
       position="Right"
-      // Near the bottom of the window, grow upward so the menu stays on screen.
-      align={volumeAnchor && volumeAnchor.y > window.innerHeight / 2 ? 'End' : 'Start'}
+      align="Start"
       content={
         <FocusTrap
           focusTrapOptions={{
@@ -671,6 +707,7 @@ function CallMemberSubItem({
               memberDevices={memberDevices}
               canModerate={canModerate}
               requestClose={closeMenu}
+              onResize={repositionMenu}
             />
           ) : (
             <Menu>

@@ -10,7 +10,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: '0.1.16',
     items: [
-      'The voice channel menu opens upward when you right-click someone near the bottom of the screen, and a long Move to channel list scrolls, so every option stays visible.',
+      'The voice channel menu moves to stay on screen when you open Move to channel near the bottom of the window, and a long channel list scrolls, so every option stays visible.',
     ],
   },
   {
