@@ -152,11 +152,77 @@ function injectVoiceTreeStyles() {
     '  align-items: center;',
     '  gap: 8px;',
     '}',
-    '.zennith-voice-volume-row input[type=range] {',
+    // Custom slider: filled part of the track follows --zv-fill (set inline).
+    '.zennith-voice-slider {',
+    '  -webkit-appearance: none;',
+    '  appearance: none;',
     '  flex: 1;',
     '  min-width: 0;',
-    `  accent-color: ${color.Success.Main};`,
+    '  height: 20px;',
+    '  margin: 0;',
+    '  background: transparent;',
     '  cursor: pointer;',
+    '}',
+    '.zennith-voice-slider:focus { outline: none; }',
+    '.zennith-voice-slider::-webkit-slider-runnable-track {',
+    '  height: 6px;',
+    '  border-radius: 999px;',
+    `  background: linear-gradient(to right, ${color.Primary.Main} 0 var(--zv-fill), ${color.SurfaceVariant.ContainerActive} var(--zv-fill) 100%);`,
+    '}',
+    '.zennith-voice-slider::-moz-range-track {',
+    '  height: 6px;',
+    '  border-radius: 999px;',
+    `  background: ${color.SurfaceVariant.ContainerActive};`,
+    '}',
+    '.zennith-voice-slider::-moz-range-progress {',
+    '  height: 6px;',
+    '  border-radius: 999px;',
+    `  background: ${color.Primary.Main};`,
+    '}',
+    '.zennith-voice-slider::-webkit-slider-thumb {',
+    '  -webkit-appearance: none;',
+    '  appearance: none;',
+    '  width: 14px;',
+    '  height: 14px;',
+    '  margin-top: -4px;',
+    '  border-radius: 50%;',
+    `  background: ${color.Primary.OnMain};`,
+    `  border: 2px solid ${color.Primary.Main};`,
+    '  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);',
+    '  transition: transform 100ms ease-out, box-shadow 100ms ease-out;',
+    '}',
+    '.zennith-voice-slider::-moz-range-thumb {',
+    '  width: 10px;',
+    '  height: 10px;',
+    '  border-radius: 50%;',
+    `  background: ${color.Primary.OnMain};`,
+    `  border: 2px solid ${color.Primary.Main};`,
+    '  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);',
+    '  transition: transform 100ms ease-out, box-shadow 100ms ease-out;',
+    '}',
+    '.zennith-voice-slider:hover::-webkit-slider-thumb,',
+    '.zennith-voice-slider:active::-webkit-slider-thumb {',
+    '  transform: scale(1.15);',
+    '}',
+    '.zennith-voice-slider:hover::-moz-range-thumb,',
+    '.zennith-voice-slider:active::-moz-range-thumb {',
+    '  transform: scale(1.15);',
+    '}',
+    '.zennith-voice-slider:focus-visible::-webkit-slider-thumb {',
+    `  box-shadow: 0 0 0 4px ${color.Primary.ContainerActive};`,
+    '}',
+    '.zennith-voice-slider:focus-visible::-moz-range-thumb {',
+    `  box-shadow: 0 0 0 4px ${color.Primary.ContainerActive};`,
+    '}',
+    '.zennith-voice-percent {',
+    '  min-width: 36px;',
+    '  text-align: right;',
+    '  font-variant-numeric: tabular-nums;',
+    '}',
+    // Separate rules: one unknown pseudo-element would void a shared selector list.
+    '@media (prefers-reduced-motion: reduce) {',
+    '  .zennith-voice-slider::-webkit-slider-thumb { transition: none; }',
+    '  .zennith-voice-slider::-moz-range-thumb { transition: none; }',
     '}',
     '.zennith-voice-avatar img {',
     '  width: 100% !important;',
@@ -197,6 +263,7 @@ import {
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
 import { useAtom, useAtomValue } from 'jotai';
+import { useNavigate } from 'react-router-dom';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -214,7 +281,12 @@ import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { TypingIndicator } from '../../components/typing-indicator';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
-import { getCanonicalAliasOrRoomId, getMxIdLocalPart, isRoomAlias, mxcUrlToHttp } from '../../utils/matrix';
+import {
+  getCanonicalAliasOrRoomId,
+  getMxIdLocalPart,
+  isRoomAlias,
+  mxcUrlToHttp,
+} from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useSetting } from '../../state/hooks/settings';
@@ -247,9 +319,12 @@ import {
   CallModerationContent,
   canModerateCall,
   getMoveTargets,
+  isCallBot,
+  sendBotCallModeration,
   sendCallModeration,
 } from '../../plugins/call/callModeration';
 import { UserAvatar } from '../../components/user-avatar';
+import { SwitchVoiceChannelPrompt } from './SwitchVoiceChannelPrompt';
 
 function CallMemberVolume({ userId, displayName }: { userId: string; displayName: string }) {
   const volume = useUserVolume(userId);
@@ -271,15 +346,17 @@ function CallMemberVolume({ userId, displayName }: { userId: string; displayName
         </IconButton>
         <input
           type="range"
+          className="zennith-voice-slider"
           min={0}
           max={100}
           step={1}
           value={percent}
+          style={{ '--zv-fill': `${percent}%` } as React.CSSProperties}
           aria-label={`Volume for ${displayName}`}
           aria-valuetext={`${percent}%`}
           onChange={(evt) => setUserVolume(userId, Number(evt.currentTarget.value) / 100)}
         />
-        <Text size="T200" style={{ minWidth: toRem(34), textAlign: 'right' }}>
+        <Text size="T200" className="zennith-voice-percent">
           {percent}%
         </Text>
       </div>
@@ -305,11 +382,14 @@ function CallMemberModeration({
 }) {
   const mx = useMatrixClient();
   const [showTargets, setShowTargets] = useState(false);
+  const isBot = isCallBot(userId);
   const [sendState, sendCommand] = useAsyncCallback(
     useCallback(
-      (content: Omit<CallModerationContent, 'ts'>) =>
-        sendCallModeration(mx, userId, deviceIds, content),
-      [mx, userId, deviceIds]
+      async (content: Omit<CallModerationContent, 'ts'>) => {
+        if (isBot) await sendBotCallModeration(mx, userId, content);
+        else await sendCallModeration(mx, userId, deviceIds, content);
+      },
+      [mx, isBot, userId, deviceIds]
     )
   );
   const busy = sendState.status === AsyncStatus.Loading;
@@ -319,7 +399,7 @@ function CallMemberModeration({
   }, [sendState.status, requestClose]);
 
   const space = spaceId ? mx.getRoom(spaceId) : null;
-  const targets = space ? getMoveTargets(mx, space, room.roomId) : [];
+  const targets = getMoveTargets(mx, space, room.roomId);
 
   return (
     <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -334,20 +414,24 @@ function CallMemberModeration({
       >
         <Text size="T300">Disconnect</Text>
       </MenuItem>
-      {targets.length > 0 && (
-        <MenuItem
-          size="300"
-          radii="300"
-          fill="None"
-          disabled={busy}
-          aria-expanded={showTargets}
-          before={<Icon size="100" src={Icons.ArrowRight} />}
-          after={<Icon size="50" src={showTargets ? Icons.ChevronBottom : Icons.ChevronRight} />}
-          onClick={() => setShowTargets(!showTargets)}
-        >
-          <Text size="T300">Move to</Text>
-        </MenuItem>
-      )}
+      <MenuItem
+        size="300"
+        radii="300"
+        fill="None"
+        disabled={busy || targets.length === 0}
+        aria-expanded={showTargets}
+        before={<Icon size="100" src={Icons.ArrowRight} />}
+        after={
+          targets.length > 0 && (
+            <Icon size="50" src={showTargets ? Icons.ChevronBottom : Icons.ChevronRight} />
+          )
+        }
+        onClick={() => setShowTargets(!showTargets)}
+      >
+        <Text size="T300">
+          {targets.length > 0 ? 'Move to channel' : 'No other voice channels'}
+        </Text>
+      </MenuItem>
       {showTargets &&
         targets.map((target) => (
           <MenuItem
@@ -369,24 +453,18 @@ function CallMemberModeration({
         ))}
       <Box style={{ padding: `0 ${config.space.S200}` }}>
         <Text size="T200" priority="300">
-          {sendState.status === AsyncStatus.Error
-            ? "Couldn't send. Try again."
-            : 'Works on Zennith clients only.'}
+          {busy && 'Sending...'}
+          {sendState.status === AsyncStatus.Error && "Couldn't send. Try again."}
+          {!busy &&
+            sendState.status !== AsyncStatus.Error &&
+            (isBot ? 'Sent to the bot as a chat command.' : 'Works on Zennith clients only.')}
         </Text>
       </Box>
     </Box>
   );
 }
 
-function CallMemberMenu({
-  room,
-  spaceId,
-  userId,
-  displayName,
-  deviceIds,
-  canModerate,
-  requestClose,
-}: {
+type CallMemberMenuProps = {
   room: Room;
   spaceId?: string;
   userId: string;
@@ -394,9 +472,12 @@ function CallMemberMenu({
   deviceIds: string[];
   canModerate: boolean;
   requestClose: () => void;
-}) {
-  return (
-    <Menu style={{ width: toRem(220) }}>
+};
+// forwardRef: FocusTrap needs the menu's DOM node, or it never activates and
+// the popout can't be closed by clicking outside or pressing Escape.
+const CallMemberMenu = forwardRef<HTMLDivElement, CallMemberMenuProps>(
+  ({ room, spaceId, userId, displayName, deviceIds, canModerate, requestClose }, ref) => (
+    <Menu ref={ref} style={{ width: toRem(240) }}>
       <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
         <Text size="L400" truncate>
           {displayName}
@@ -416,8 +497,8 @@ function CallMemberMenu({
         </>
       )}
     </Menu>
-  );
-}
+  )
+);
 
 function CallMemberSubItem({
   userId,
@@ -440,7 +521,7 @@ function CallMemberSubItem({
   const openUserProfile = useOpenUserRoomProfile();
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl
-    ? (mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined)
+    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 48, 48, 'crop') ?? undefined
     : undefined;
   const isSelf = userId === mx.getUserId();
   const volume = useUserVolume(userId);
@@ -460,9 +541,7 @@ function CallMemberSubItem({
     !!room && !!myUserId && deviceIds.length > 0 && canModerateCall(mx, room, myUserId, userId);
 
   // Discord-style colored avatar fallback — deterministic hue from userId.
-  const hue = userId
-    ? [...userId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360
-    : 0;
+  const hue = userId ? [...userId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360 : 0;
   const initial = (displayName || 'U').charAt(0).toUpperCase();
   const showFallback = !avatarUrl || imgError;
   const avatarClass = `zennith-voice-avatar${isSpeaking ? ' speaking' : ''}`;
@@ -488,12 +567,18 @@ function CallMemberSubItem({
     evt.preventDefault();
     evt.stopPropagation();
     const rect = (evt.currentTarget as HTMLElement).getBoundingClientRect();
-    openUserProfile(roomId, spaceId, userId, {
-      x: rect.right,
-      y: rect.top,
-      width: 0,
-      height: 0,
-    }, 'Left');
+    openUserProfile(
+      roomId,
+      spaceId,
+      userId,
+      {
+        x: rect.right,
+        y: rect.top,
+        width: 0,
+        height: 0,
+      },
+      'Left'
+    );
   };
 
   // Right-click: per-user volume instead of the room menu.
@@ -520,7 +605,9 @@ function CallMemberSubItem({
     .filter(Boolean)
     .join(', ');
 
-  const avatarEl = showFallback ? fallbackEl : (
+  const avatarEl = showFallback ? (
+    fallbackEl
+  ) : (
     <img
       className={avatarClass}
       src={avatarUrl}
@@ -854,6 +941,8 @@ export function RoomNavItem({
   const space = useSpaceOptionally();
   const callPref = useAtomValue(useCallPreferencesAtom());
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
+  const navigate = useNavigate();
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
 
   const handleStartCall: MouseEventHandler<HTMLAnchorElement> = (evt) => {
     const powerLevelsEvent = getStateEvent(room, StateEvent.RoomPowerLevels);
@@ -874,9 +963,11 @@ export function RoomNavItem({
     if (callEmbed) {
       // Already in a call here: nothing to do.
       if (callEmbed.roomId === room.roomId) return;
-      // In a call in another channel: switch straight away (and still navigate).
+      // In a call in another channel: confirm first, so a stray click while
+      // browsing channels doesn't move you.
       if (callEmbed.joined) {
-        startCall(room, callPref);
+        evt.preventDefault();
+        setConfirmSwitch(true);
         return;
       }
     }
@@ -885,6 +976,12 @@ export function RoomNavItem({
       evt.preventDefault();
       startCall(room, callPref);
     }
+  };
+
+  const handleConfirmSwitch = () => {
+    setConfirmSwitch(false);
+    startCall(room, callPref);
+    navigate(linkPath);
   };
 
   return (
@@ -996,9 +1093,16 @@ export function RoomNavItem({
             )}
           </div>
         )}
+      </div>
 
-        </div>
-
+      {confirmSwitch && callEmbed && (
+        <SwitchVoiceChannelPrompt
+          fromName={mx.getRoom(callEmbed.roomId)?.name ?? 'another voice channel'}
+          toName={roomName}
+          onConfirm={handleConfirmSwitch}
+          onCancel={() => setConfirmSwitch(false)}
+        />
+      )}
       {optionsVisible && (
         <NavItemOptions>
           {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (
