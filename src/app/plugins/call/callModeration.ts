@@ -16,21 +16,32 @@ import { StateEvent } from '../../../types/matrix/room';
 //
 // A call membership is owned by the member's own client: matrix-js-sdk re-sends
 // it if anyone else removes it, so the server can't take someone out of a call.
-// Instead the moderator's client sends a to-device command to the member's call
-// devices, and Zennith clients obey it after checking the sender's power in that
-// room. Other clients (Element etc.) ignore the unknown event type.
+// Instead the moderator's client sends a command, and Zennith clients obey it
+// after checking the sender's power in that room. The command goes out twice:
+// as a to-device message to the member's call devices, and as a hidden event in
+// the call room. Other clients (Element etc.) ignore the unknown event type.
+//
+// Stale commands (e.g. delivered after the member rejoined) are rejected by
+// naming the call memberships being ended, not by comparing the two PCs'
+// clocks: a PC clock a couple of minutes off made every command look stale.
 
 export const CALL_MODERATION_EVENT = 'zennith.call.control';
 
-// Commands older than this are ignored (e.g. delivered after being offline).
+// Commands from older clients (no memberships) older than this are ignored.
 const MAX_AGE_MS = 60_000;
 
 export type CallModerationContent = {
   action: 'disconnect' | 'move';
   room_id: string;
   target_room_id?: string;
+  // Who the command is for. Needed on the room event, which every member sees.
+  target_user_id?: string;
+  // The member's call memberships being ended: device id -> membership created ts.
+  memberships?: Record<string, number>;
   ts: number;
 };
+
+export type CallMemberDevice = { deviceId: string; createdTs: number };
 
 // Same rule as kicking: the kick power level, and strictly more power than the target.
 export const canModerateCall = (
@@ -51,15 +62,28 @@ export const canModerateCall = (
   return readPowerLevel.user(powerLevels, actorId) > readPowerLevel.user(powerLevels, targetId);
 };
 
-export const sendCallModeration = (
+export const sendCallModeration = async (
   mx: MatrixClient,
   userId: string,
-  deviceIds: string[],
-  content: Omit<CallModerationContent, 'ts'>
+  memberDevices: CallMemberDevice[],
+  content: Pick<CallModerationContent, 'action' | 'room_id' | 'target_room_id'>
 ) => {
-  const payload: CallModerationContent = { ...content, ts: Date.now() };
-  const devices = new Map(deviceIds.map((deviceId) => [deviceId, payload]));
-  return mx.sendToDevice(CALL_MODERATION_EVENT, new Map([[userId, devices]]));
+  const payload: CallModerationContent = {
+    ...content,
+    target_user_id: userId,
+    memberships: Object.fromEntries(memberDevices.map((d) => [d.deviceId, d.createdTs])),
+    ts: Date.now(),
+  };
+  const devices = new Map(memberDevices.map(({ deviceId }) => [deviceId, payload]));
+  const results = await Promise.allSettled([
+    mx.sendToDevice(CALL_MODERATION_EVENT, new Map([[userId, devices]])),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mx.sendEvent(content.room_id, CALL_MODERATION_EVENT as any, payload),
+  ]);
+  // Fine as long as one route got through.
+  if (results.every((r) => r.status === 'rejected')) {
+    throw (results[0] as PromiseRejectedResult).reason;
+  }
 };
 
 export const parseCallModeration = (content: unknown): CallModerationContent | undefined => {
@@ -67,17 +91,53 @@ export const parseCallModeration = (content: unknown): CallModerationContent | u
   const c = content as Partial<CallModerationContent>;
   if (c.action !== 'disconnect' && c.action !== 'move') return undefined;
   if (typeof c.room_id !== 'string' || typeof c.ts !== 'number') return undefined;
-  if (Math.abs(Date.now() - c.ts) > MAX_AGE_MS) return undefined;
   if (c.action === 'move' && typeof c.target_room_id !== 'string') return undefined;
+  if (c.memberships !== undefined && (typeof c.memberships !== 'object' || !c.memberships)) {
+    return undefined;
+  }
   return c as CallModerationContent;
 };
 
-// Voice channels a member can be moved to: joined call rooms in the same space,
-// or every joined call room when the channel isn't viewed inside a space.
+// Whether a command still applies to our current membership in its call.
+// myMembershipTs: created ts of this device's membership there. ageMs: how old
+// the command is when known without trusting clocks (a room event's age is
+// measured by the server); only used for commands from clients that don't send
+// memberships yet, which fall back to the sender's ts.
+export const isCurrentCallModeration = (
+  command: CallModerationContent,
+  deviceId: string,
+  myMembershipTs: number | undefined,
+  ageMs?: number
+): boolean => {
+  if (command.memberships) {
+    return myMembershipTs !== undefined && command.memberships[deviceId] === myMembershipTs;
+  }
+  return (ageMs ?? Math.abs(Date.now() - command.ts)) <= MAX_AGE_MS;
+};
+
+// Voice channels a member can be moved to: joined call rooms anywhere in the
+// space, including categories (sub-spaces), or every joined call room when the
+// channel isn't viewed inside a space.
+const getSpaceRoomsDeep = (mx: MatrixClient, space: Room): Room[] => {
+  const seen = new Set<string>([space.roomId]);
+  const rooms: Room[] = [];
+  const walk = (parent: Room) => {
+    getSpaceChildren(parent).forEach((roomId) => {
+      if (seen.has(roomId)) return;
+      seen.add(roomId);
+      const child = mx.getRoom(roomId);
+      if (!child) return;
+      if (child.isSpaceRoom()) walk(child);
+      else rooms.push(child);
+    });
+  };
+  walk(space);
+  return rooms;
+};
+
 export const getMoveTargets = (mx: MatrixClient, space: Room | null, fromRoomId: string): Room[] =>
-  (space ? getSpaceChildren(space).map((roomId) => mx.getRoom(roomId)) : mx.getRooms()).filter(
-    (r): r is Room =>
-      !!r && r.roomId !== fromRoomId && r.getMyMembership() === 'join' && r.isCallRoom()
+  (space ? getSpaceRoomsDeep(mx, space) : mx.getRooms()).filter(
+    (r) => r.roomId !== fromRoomId && r.getMyMembership() === 'join' && r.isCallRoom()
   );
 
 // Music bots join calls without running Zennith, so they never see the to-device
@@ -117,7 +177,7 @@ const waitForJoin = (mx: MatrixClient, room: Room, userId: string): Promise<bool
 export const sendBotCallModeration = async (
   mx: MatrixClient,
   botId: string,
-  content: Omit<CallModerationContent, 'ts'>
+  content: Pick<CallModerationContent, 'action' | 'room_id' | 'target_room_id'>
 ) => {
   await sendBotCommand(mx, content.room_id, '!leave');
   if (content.action !== 'move' || !content.target_room_id) return;

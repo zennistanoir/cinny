@@ -72,6 +72,8 @@ import {
   CALL_MODERATION_EVENT,
   canModerateCall,
   parseCallModeration,
+  isCurrentCallModeration,
+  CallModerationContent,
 } from '../plugins/call/callModeration';
 
 // A call event cue: the toggle sound and / or a visual caption
@@ -748,8 +750,8 @@ function CallCueCaptions() {
 const MODERATION_NOTICE_MS = 6000;
 
 // Obeys moderator disconnect / move commands for the call we are in. Only
-// commands for that call, from someone who could kick us there, are acted on;
-// anything else is dropped silently.
+// commands for that call, from someone who could kick us there, are acted on.
+// Ignored commands are logged to the console with the reason, to debug with.
 function CallModerationListener() {
   const mx = useMatrixClient();
   const store = useStore();
@@ -758,16 +760,39 @@ function CallModerationListener() {
   const [notice, setNotice] = useState<string>();
 
   useEffect(() => {
-    const handleToDevice = (event: MatrixEvent) => {
-      if (event.getType() !== CALL_MODERATION_EVENT) return;
-      const command = parseCallModeration(event.getContent());
-      const sender = event.getSender();
+    // The same command arrives by to-device and as a room event; act once.
+    const handled = new Set<string>();
+    const ignore = (reason: string, sender?: string) => {
+      // eslint-disable-next-line no-console
+      console.info(`[zennith] call moderation from ${sender ?? 'unknown'} ignored: ${reason}`);
+    };
+
+    const apply = (
+      sender: string | undefined,
+      command: CallModerationContent | undefined,
+      ageMs?: number
+    ) => {
+      if (!command) return ignore('malformed', sender);
       const myUserId = mx.getUserId();
+      const myDeviceId = mx.getDeviceId();
+      if (!sender || !myUserId || !myDeviceId) return ignore('no sender', sender);
+      if (command.target_user_id && command.target_user_id !== myUserId) return undefined;
+      const key = `${sender}|${command.ts}|${command.action}`;
+      if (handled.has(key)) return undefined;
       const embed = store.get(callEmbedAtom);
-      if (!command || !sender || !myUserId || !embed) return;
-      if (embed.roomId !== command.room_id) return;
+      if (!embed) return ignore('not in a call', sender);
+      if (embed.roomId !== command.room_id) return ignore('in a different call', sender);
       const room = mx.getRoom(command.room_id);
-      if (!room || !canModerateCall(mx, room, sender, myUserId)) return;
+      if (!room || !canModerateCall(mx, room, sender, myUserId)) {
+        return ignore('sender lacks permission in this channel', sender);
+      }
+      const myMembership = mx.matrixRTC
+        .getRoomSession(room)
+        .memberships.find((m) => m.userId === myUserId && m.deviceId === myDeviceId);
+      if (!isCurrentCallModeration(command, myDeviceId, myMembership?.createdTs(), ageMs)) {
+        return ignore('stale (meant for an earlier time in this call)', sender);
+      }
+      handled.add(key);
 
       const by = room.getMember(sender)?.name ?? sender;
       if (command.action === 'move' && command.target_room_id) {
@@ -781,19 +806,46 @@ function CallModerationListener() {
           startCall(target).catch(() => undefined);
           navigateRoom(target.roomId);
           setNotice(`Moved to ${target.name} by ${by}.`);
-          return;
+          return undefined;
         }
         embed.hangup().catch(() => undefined);
         setNotice(`Disconnected by ${by}. You aren't in the voice channel they moved you to.`);
-        return;
+        return undefined;
       }
       embed.hangup().catch(() => undefined);
       setNotice(`Disconnected by ${by}.`);
+      return undefined;
+    };
+
+    const handleToDevice = (event: MatrixEvent) => {
+      if (event.getType() !== CALL_MODERATION_EVENT) return;
+      apply(event.getSender(), parseCallModeration(event.getContent()));
+    };
+
+    const handleTimeline: EventTimelineSetHandlerMap[RoomEvent.Timeline] = async (
+      event,
+      room,
+      toStartOfTimeline,
+      removed,
+      data
+    ) => {
+      if (toStartOfTimeline || removed || !data.liveEvent || !room?.isCallRoom()) return;
+      if (event.getSender() === mx.getUserId()) return;
+      if (event.isEncrypted()) {
+        if (!event.isBeingDecrypted()) {
+          await event.attemptDecryption(mx.getCrypto() as CryptoBackend);
+        }
+        await event.getDecryptionPromise();
+      }
+      if (event.getType() !== CALL_MODERATION_EVENT) return;
+      apply(event.getSender(), parseCallModeration(event.getContent()), event.getLocalAge());
     };
 
     mx.on(ClientEvent.ToDeviceEvent, handleToDevice);
+    mx.on(RoomEvent.Timeline, handleTimeline);
     return () => {
       mx.off(ClientEvent.ToDeviceEvent, handleToDevice);
+      mx.off(RoomEvent.Timeline, handleTimeline);
     };
   }, [mx, store, startCall, navigateRoom]);
 

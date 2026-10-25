@@ -316,6 +316,7 @@ import { setUserVolume, useCallPresence, useUserVolume } from '../../plugins/cal
 import { useCallSpeakers } from '../../hooks/useCallSpeakers';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import {
+  CallMemberDevice,
   CallModerationContent,
   canModerateCall,
   getMoveTargets,
@@ -367,17 +368,20 @@ function CallMemberVolume({ userId, displayName }: { userId: string; displayName
   );
 }
 
+// How long to wait for a disconnected/moved member to leave before saying so.
+const LEAVE_TIMEOUT_MS = 10_000;
+
 function CallMemberModeration({
   room,
   spaceId,
   userId,
-  deviceIds,
+  memberDevices,
   requestClose,
 }: {
   room: Room;
   spaceId?: string;
   userId: string;
-  deviceIds: string[];
+  memberDevices: CallMemberDevice[];
   requestClose: () => void;
 }) {
   const mx = useMatrixClient();
@@ -385,21 +389,35 @@ function CallMemberModeration({
   const isBot = isCallBot(userId);
   const [sendState, sendCommand] = useAsyncCallback(
     useCallback(
-      async (content: Omit<CallModerationContent, 'ts'>) => {
+      async (content: Pick<CallModerationContent, 'action' | 'room_id' | 'target_room_id'>) => {
         if (isBot) await sendBotCallModeration(mx, userId, content);
-        else await sendCallModeration(mx, userId, deviceIds, content);
+        else await sendCallModeration(mx, userId, memberDevices, content);
       },
-      [mx, isBot, userId, deviceIds]
+      [mx, isBot, userId, memberDevices]
     )
   );
   const busy = sendState.status === AsyncStatus.Loading;
 
+  // Once sent, stay open until the member actually leaves the call (this row
+  // then unmounts), so a command their client ignores doesn't look like success.
+  const [stillConnected, setStillConnected] = useState(false);
   useEffect(() => {
-    if (sendState.status === AsyncStatus.Success) requestClose();
-  }, [sendState.status, requestClose]);
+    if (sendState.status !== AsyncStatus.Success) return undefined;
+    if (isBot) {
+      requestClose();
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setStillConnected(true), LEAVE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [sendState.status, isBot, requestClose]);
+  const waiting = sendState.status === AsyncStatus.Success && !isBot;
 
   const space = spaceId ? mx.getRoom(spaceId) : null;
-  const targets = getMoveTargets(mx, space, room.roomId);
+  // A moved member's client only follows into channels they've joined; the bot
+  // gets invited instead.
+  const targets = getMoveTargets(mx, space, room.roomId).filter(
+    (target) => isBot || target.getMember(userId)?.membership === 'join'
+  );
 
   return (
     <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -429,7 +447,7 @@ function CallMemberModeration({
         onClick={() => setShowTargets(!showTargets)}
       >
         <Text size="T300">
-          {targets.length > 0 ? 'Move to channel' : 'No other voice channels'}
+          {targets.length > 0 ? 'Move to channel' : 'No voice channel to move them to'}
         </Text>
       </MenuItem>
       {showTargets &&
@@ -455,7 +473,12 @@ function CallMemberModeration({
         <Text size="T200" priority="300">
           {busy && 'Sending...'}
           {sendState.status === AsyncStatus.Error && "Couldn't send. Try again."}
+          {waiting &&
+            (stillConnected
+              ? "They're still connected. Their Zennith may need updating."
+              : 'Waiting for them to leave...')}
           {!busy &&
+            !waiting &&
             sendState.status !== AsyncStatus.Error &&
             (isBot ? 'Sent to the bot as a chat command.' : 'Works on Zennith clients only.')}
         </Text>
@@ -469,14 +492,14 @@ type CallMemberMenuProps = {
   spaceId?: string;
   userId: string;
   displayName: string;
-  deviceIds: string[];
+  memberDevices: CallMemberDevice[];
   canModerate: boolean;
   requestClose: () => void;
 };
 // forwardRef: FocusTrap needs the menu's DOM node, or it never activates and
 // the popout can't be closed by clicking outside or pressing Escape.
 const CallMemberMenu = forwardRef<HTMLDivElement, CallMemberMenuProps>(
-  ({ room, spaceId, userId, displayName, deviceIds, canModerate, requestClose }, ref) => (
+  ({ room, spaceId, userId, displayName, memberDevices, canModerate, requestClose }, ref) => (
     <Menu ref={ref} style={{ width: toRem(240) }}>
       <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
         <Text size="L400" truncate>
@@ -491,7 +514,7 @@ const CallMemberMenu = forwardRef<HTMLDivElement, CallMemberMenuProps>(
             room={room}
             spaceId={spaceId}
             userId={userId}
-            deviceIds={deviceIds}
+            memberDevices={memberDevices}
             requestClose={requestClose}
           />
         </>
@@ -505,7 +528,7 @@ function CallMemberSubItem({
   roomId,
   spaceId,
   inCall,
-  deviceIds,
+  memberDevices,
 }: {
   userId: string;
   roomId: string;
@@ -513,7 +536,7 @@ function CallMemberSubItem({
   // Speaking / sharing state only comes from the call we are in.
   inCall?: boolean;
   // The member's devices in this call, for moderator commands.
-  deviceIds: string[];
+  memberDevices: CallMemberDevice[];
 }) {
   const mx = useMatrixClient();
   const profile = useUserProfile(userId);
@@ -538,7 +561,7 @@ function CallMemberSubItem({
   const room = mx.getRoom(roomId);
   const myUserId = mx.getUserId();
   const canModerate =
-    !!room && !!myUserId && deviceIds.length > 0 && canModerateCall(mx, room, myUserId, userId);
+    !!room && !!myUserId && memberDevices.length > 0 && canModerateCall(mx, room, myUserId, userId);
 
   // Discord-style colored avatar fallback — deterministic hue from userId.
   const hue = userId ? [...userId].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360 : 0;
@@ -637,7 +660,7 @@ function CallMemberSubItem({
               spaceId={spaceId}
               userId={userId}
               displayName={displayName}
-              deviceIds={deviceIds}
+              memberDevices={memberDevices}
               canModerate={canModerate}
               requestClose={closeMenu}
             />
@@ -1079,9 +1102,9 @@ export function RoomNavItem({
                 roomId={room.roomId}
                 spaceId={space?.roomId}
                 inCall={callEmbed?.roomId === room.roomId}
-                deviceIds={callMembers
+                memberDevices={callMembers
                   .filter((m) => m.userId === member.userId)
-                  .map((m) => m.deviceId)}
+                  .map((m) => ({ deviceId: m.deviceId, createdTs: m.createdTs() }))}
               />
             ))}
             {voiceUsers.length > 10 && (
