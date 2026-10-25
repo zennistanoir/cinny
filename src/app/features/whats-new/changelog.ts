@@ -8,6 +8,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.15',
+    items: [
+      'Disconnect and Move from the voice channel menu now work even when someone’s PC clock is a little off.',
+      'Move to channel now lists voice channels inside categories too.',
+      'After you disconnect or move someone, the menu waits until they’ve actually left, and tells you if they haven’t.',
+    ],
+  },
+  {
     version: '0.1.14',
     items: [
       'The menu you get by right-clicking someone in a voice channel now closes when you click away or press Esc.',
