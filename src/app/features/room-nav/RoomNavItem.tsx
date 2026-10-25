@@ -450,25 +450,29 @@ function CallMemberModeration({
           {targets.length > 0 ? 'Move to channel' : 'No voice channel to move them to'}
         </Text>
       </MenuItem>
-      {showTargets &&
-        targets.map((target) => (
-          <MenuItem
-            key={target.roomId}
-            size="300"
-            radii="300"
-            fill="None"
-            disabled={busy}
-            style={{ paddingLeft: config.space.S500 }}
-            before={<Icon size="50" src={Icons.VolumeHigh} />}
-            onClick={() =>
-              sendCommand({ action: 'move', room_id: room.roomId, target_room_id: target.roomId })
-            }
-          >
-            <Text size="T300" truncate>
-              {target.name}
-            </Text>
-          </MenuItem>
-        ))}
+      {showTargets && (
+        // Scrolls on its own so a long channel list never pushes the menu off screen.
+        <div style={{ maxHeight: toRem(180), overflowY: 'auto' }}>
+          {targets.map((target) => (
+            <MenuItem
+              key={target.roomId}
+              size="300"
+              radii="300"
+              fill="None"
+              disabled={busy}
+              style={{ paddingLeft: config.space.S500 }}
+              before={<Icon size="50" src={Icons.VolumeHigh} />}
+              onClick={() =>
+                sendCommand({ action: 'move', room_id: room.roomId, target_room_id: target.roomId })
+              }
+            >
+              <Text size="T300" truncate>
+                {target.name}
+              </Text>
+            </MenuItem>
+          ))}
+        </div>
+      )}
       <Box style={{ padding: `0 ${config.space.S200}` }}>
         <Text size="T200" priority="300">
           {busy && 'Sending...'}
@@ -500,7 +504,10 @@ type CallMemberMenuProps = {
 // the popout can't be closed by clicking outside or pressing Escape.
 const CallMemberMenu = forwardRef<HTMLDivElement, CallMemberMenuProps>(
   ({ room, spaceId, userId, displayName, memberDevices, canModerate, requestClose }, ref) => (
-    <Menu ref={ref} style={{ width: toRem(240) }}>
+    <Menu
+      ref={ref}
+      style={{ width: toRem(240), maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
+    >
       <Box style={{ padding: `${config.space.S300} ${config.space.S300} 0` }}>
         <Text size="L400" truncate>
           {displayName}
@@ -643,7 +650,8 @@ function CallMemberSubItem({
     <PopOut
       anchor={volumeAnchor}
       position="Right"
-      align="Start"
+      // Near the bottom of the window, grow upward so the menu stays on screen.
+      align={volumeAnchor && volumeAnchor.y > window.innerHeight / 2 ? 'End' : 'Start'}
       content={
         <FocusTrap
           focusTrapOptions={{
