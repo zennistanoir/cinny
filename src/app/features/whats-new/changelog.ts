@@ -8,6 +8,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.16',
+    items: [
+      'The voice channel menu opens upward when you right-click someone near the bottom of the screen, and a long Move to channel list scrolls, so every option stays visible.',
+    ],
+  },
+  {
     version: '0.1.15',
     items: [
       'Disconnect and Move from the voice channel menu now work even when someone’s PC clock is a little off.',
